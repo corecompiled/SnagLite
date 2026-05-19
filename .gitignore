@@ -1,0 +1,36 @@
+bin/
+obj/
+publish/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+
+# Local-only Claude reference notes (do NOT commit)
+*.local.md
+*.local.json
+
+# Runtime-loaded wrapper-host list (do NOT commit) — see PRIVATE_NOTES.local.md
+hosts.local.txt
+
+# Android / Gradle build output
+android/build/
+android/app/build/
+android/.gradle/
+**/.gradle/
+android/local.properties
+
+# Agent / IDE state
+.claude/
+
+# Signing keystores (defensive — none currently in tree)
+*.jks
+*.keystore
+
+# Build logs
+*.build.log
+
+# OS junk
+Thumbs.db
+.DS_Store
