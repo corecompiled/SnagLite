@@ -41,6 +41,18 @@ dotnet publish src/SnagLite/SnagLite.csproj -c Release -r win-x64 --self-contain
 cd android && .\gradlew.bat :app:assembleRelease                                                  # → app-{arm64-v8a,armeabi-v7a,x86_64,universal}-release.apk
 ```
 
+## CI
+
+Three GitHub Actions workflows live under `.github/workflows/`:
+
+| Workflow | Trigger | Output |
+|---|---|---|
+| `dotnet-cli.yml` | push / PR to `src/**` | `snaglite.exe` as 90-day Actions artifact |
+| `android-debug.yml` | push / PR to `android/**` | 4 debug APKs as 90-day Actions artifact |
+| `release.yml` | **manual only** (`workflow_dispatch`) | `snaglite.exe` + 4 debug APKs attached to a new GitHub Release. Inputs: `tag` (required, e.g. `v0.1.0`), `prerelease` (bool, default false), `notes` (Markdown; auto-generated from commits if blank). Asset filenames are rewritten to include the tag (`snaglite-<tag>-win-x64.exe`, `snaglite-<tag>-<abi>-debug.apk`). User-facing runbook lives in the README **Cutting a release** section. |
+
+Release-signed (production) APKs are not wired into `release.yml` yet — it builds `assembleDebug`. Promoting to `assembleRelease` is a one-line swap once the four signing env vars are added as GitHub Secrets (`SNAGLITE_KEYSTORE_PATH/_PASS/_ALIAS`, `SNAGLITE_KEY_PASS`) and the keystore is uploaded as a base64-encoded secret + decoded in a step before the Gradle invocation.
+
 ## Runtime data
 
 | Platform | Binaries | Config / prefs | Default output |

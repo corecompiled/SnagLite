@@ -20,7 +20,7 @@ Both builds share the same philosophy: no accounts, no telemetry, no nags, no PA
 
 ## Quick start
 
-**Windows CLI** — grab `snaglite.exe` from a GitHub Actions artifact (or build it yourself), drop it on your `PATH`, and:
+**Windows CLI** — grab `snaglite.exe` from the [Releases page](https://github.com/corecompiled/SnagLite/releases) (or build it yourself), drop it on your `PATH`, and:
 
 ```powershell
 snaglite https://www.youtube.com/watch?v=dQw4w9WgXcQ
@@ -28,7 +28,7 @@ snaglite https://www.youtube.com/watch?v=dQw4w9WgXcQ
 
 First invocation auto-downloads `yt-dlp.exe`, `ffmpeg.exe`, and `aria2c.exe` to `%LOCALAPPDATA%\SnagLite\bin`. From then on it's instant.
 
-**Android** — build the APK with `./gradlew :app:assembleDebug` (or pull one from CI), sideload, paste a URL into the input box, tap **Download**. The setup screen on first launch handles the rest. Files land in `Movies/SnagLite` or `Music/SnagLite` and show up in your gallery without any storage permission prompts on Android 10+.
+**Android** — download an APK from the [Releases page](https://github.com/corecompiled/SnagLite/releases) (or build it yourself with `./gradlew :app:assembleDebug`), sideload, paste a URL into the input box, tap **Download**. The setup screen on first launch handles the rest. Files land in `Movies/SnagLite` or `Music/SnagLite` and show up in your gallery without any storage permission prompts on Android 10+.
 
 ## What makes it different
 
@@ -67,7 +67,7 @@ If a site's player obfuscates the stream URL beyond what the bundled extractors 
 
 ### Install
 
-1. Grab `snaglite.exe` from `publish/` (after running the publish command below) or from a release.
+1. Grab `snaglite.exe` from the [Releases page](https://github.com/corecompiled/SnagLite/releases), or from `publish/` after running the publish command below.
 2. Drop it anywhere on your `PATH` (e.g. `C:\Tools\snaglite.exe`).
 3. First invocation auto-downloads helper binaries to `%LOCALAPPDATA%\SnagLite\bin`.
 
@@ -181,7 +181,7 @@ Most public videos work without sign-in. Age-gated, members-only, or aggressivel
 
 ### Install
 
-Build artifacts land in `android/app/build/outputs/apk/`:
+Pre-built debug APKs are attached to each entry on the [Releases page](https://github.com/corecompiled/SnagLite/releases) — pick the variant for your device and sideload. To build locally instead, build artifacts land in `android/app/build/outputs/apk/`:
 
 | APK | Use case |
 |---|---|
@@ -258,6 +258,38 @@ Tap the gear icon on the main screen.
 - **First-launch setup hangs at "Updating yt-dlp"** — slow network or GitHub throttling. Failure is non-fatal; the bundled yt-dlp will still work. Retry from Settings later.
 - **Saved file not visible in gallery** — MediaStore indexes asynchronously; takes a few seconds. Pull to refresh in the gallery app.
 - **App "keeps stopping" on launch** — the uncaught-exception handler writes a full stack trace to `Android/data/com.patron.snaglite/files/last_crash.txt`. Pull that file via any file manager (Files by Google, the system Files app, USB MTP) and share it; that's the fastest path to a fix.
+
+---
+
+## Cutting a release
+
+Releases (`snaglite.exe` + 4 debug APKs, attached to a tag at https://github.com/corecompiled/SnagLite/releases) are cut by a **manually-triggered** GitHub Actions workflow. There is no auto-publish on tag push — every release is an explicit decision.
+
+1. Make sure `main` builds clean locally:
+   ```powershell
+   dotnet publish src/SnagLite/SnagLite.csproj -c Release -r win-x64 --self-contained -o publish
+   cd android; .\gradlew.bat :app:assembleDebug; cd ..
+   ```
+2. Push everything you want in the release to `main` (or whichever branch you'll release from).
+3. Open **https://github.com/corecompiled/SnagLite/actions/workflows/release.yml** in a browser.
+4. Click the grey **Run workflow** dropdown (top right).
+5. Fill in:
+   - **Branch** — usually `main`. The chosen commit is what the tag attaches to.
+   - **Release tag** — semver with a `v` prefix, e.g. `v0.1.0`. Must not already exist.
+   - **Mark as pre-release?** — tick for alpha / beta, leave unticked for stable.
+   - **Release notes** — leave blank to auto-generate from commits since the previous tag, or paste your own Markdown.
+6. Click the green **Run workflow** button.
+7. Wait 5–10 minutes. The workflow runs three jobs in order: `build-win` and `build-android` in parallel, then `publish`.
+8. When it goes green, the release appears at **https://github.com/corecompiled/SnagLite/releases** with 5 attached assets:
+   - `snaglite-<tag>-win-x64.exe`
+   - `snaglite-<tag>-arm64-v8a-debug.apk`
+   - `snaglite-<tag>-armeabi-v7a-debug.apk`
+   - `snaglite-<tag>-x86_64-debug.apk`
+   - `snaglite-<tag>-universal-debug.apk`
+
+To **delete** a release (e.g. typo in the tag): on the Releases page, click the release title → trash icon. Then on the Tags page, delete the matching tag — otherwise re-running the workflow with the same tag fails with a tag-already-exists error.
+
+> APKs are currently **debug-signed** — installable, but a different signature from any future release-signed build, so users will need to uninstall before upgrading across a debug → release transition. Wiring up release signing in CI requires uploading the keystore + four passwords as GitHub Secrets; see `CLAUDE.md` for the upgrade path.
 
 ---
 

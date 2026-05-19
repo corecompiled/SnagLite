@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.0). Tag will be created on the commit that runs the workflow.'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release?'
+        required: false
+        type: boolean
+        default: false
+      notes:
+        description: 'Optional release notes (Markdown). Leave blank to auto-generate from commits.'
+        required: false
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-win:
+    name: Build snaglite.exe
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore src/SnagLite/SnagLite.csproj
+
+      - name: Publish
+        run: dotnet publish src/SnagLite/SnagLite.csproj -c Release -r win-x64 --self-contained -o publish --no-restore
+
+      - name: Upload snaglite.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-x64
+          path: publish/snaglite.exe
+          if-no-files-found: error
+
+  build-android:
+    name: Build Android debug APKs
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Build debug APKs
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  publish:
+    name: Create GitHub Release
+    needs: [build-win, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Stage release assets with version tag in filename
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp "dist/win-x64/snaglite.exe" "release/snaglite-${{ inputs.tag }}-win-x64.exe"
+          for f in dist/android-debug/*.apk; do
+            base=$(basename "$f" .apk)
+            cp "$f" "release/snaglite-${{ inputs.tag }}-${base#app-}.apk"
+          done
+          ls -lh release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
+          body: ${{ inputs.notes }}
+          generate_release_notes: true
+          prerelease: ${{ inputs.prerelease }}
+          files: release/*
+          fail_on_unmatched_files: true
