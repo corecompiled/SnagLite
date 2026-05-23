@@ -8,7 +8,11 @@ sealed interface DownloadStatus {
     data class Running(val percent: Float, val line: String) : DownloadStatus
     data class Paused(val percent: Float, val line: String) : DownloadStatus
     data class Done(val publicUri: Uri, val displayName: String) : DownloadStatus
-    data class Error(val message: String, val needsYouTubeSignIn: Boolean = false) : DownloadStatus
+    data class Error(
+        val message: String,
+        val needsYouTubeSignIn: Boolean = false,
+        val needsEngineUpdate: Boolean = false,
+    ) : DownloadStatus
 }
 
 data class DownloadItem(

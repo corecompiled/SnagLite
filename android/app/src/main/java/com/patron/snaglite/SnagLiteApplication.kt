@@ -9,6 +9,7 @@ import com.patron.snaglite.download.DownloadController
 import com.patron.snaglite.download.MediaSink
 import com.patron.snaglite.download.SnagLitePrefs
 import com.patron.snaglite.download.resolvers.IframeUnwrapper
+import com.patron.snaglite.yt.EngineUpdateChecker
 import com.patron.snaglite.yt.YouTubePrefs
 import com.yausername.aria2c.Aria2c
 import com.yausername.ffmpeg.FFmpeg
@@ -57,9 +58,16 @@ class SnagLiteApplication : Application() {
             }
         }
         // Eager engine init only when setup is already complete; otherwise SetupScreen drives it.
-        // Engine update checks are gated by user consent (see EngineUpdateChecker + UpdateGate).
+        // After engines are ready, fire a silent yt-dlp update check (wifi-only,
+        // 24 h-debounced) so the binary stays current across cold launches without
+        // ever surfacing UI.
         if (YouTubePrefs.isSetupComplete(this)) {
-            applicationScope.launch { ensureEngines() }
+            applicationScope.launch {
+                ensureEngines()
+                if (enginesReady) {
+                    EngineUpdateChecker.runSilentUpdateIfDue(this@SnagLiteApplication)
+                }
+            }
         }
     }
 

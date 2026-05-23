@@ -170,14 +170,14 @@ Kotlin + Jetpack Compose APK. Wraps the same `yt-dlp` + `ffmpeg` + `aria2c` engi
 
 ### YouTube auth (automatic)
 
-YouTube actively blocks anonymous requests. SnagLite handles this in three layers:
+YouTube actively blocks anonymous requests. SnagLite handles this transparently — the user never sees a sign-in prompt unless a specific video genuinely needs an account.
 
-1. **Auto-update yt-dlp** so latest extractor logic is in play.
-2. **Per-request injection** of `--user-agent`, `--cookies`, `--add-header Accept-Language`, and `--extractor-args youtube:player_client=tv_simply,default,mweb;formats=missing_pot;visitor_data=…` (harvested via hidden WebView during setup).
-3. **Auto-retry on bot/sign-in error** with a fallback `player_client` chain (`web_safari,android_vr,mweb`). Invisible. No user action.
-4. **Sign-in fallback** — if both chains fail, the error card surfaces a **Sign in to YouTube** button. Tapping opens a full-screen WebView at Google login. On success SnagLite exports the cookies to `cookies.txt` and auto-retries the download. Cached forever.
+1. **Silent background yt-dlp updates** — on every cold launch (wifi-only, 24 h-debounced) the app checks for a newer `yt-dlp` and installs it in the background. No dialog. The existing binary keeps serving downloads until the swap completes.
+2. **Per-request injection** of `--user-agent`, `--cookies`, `--add-header Accept-Language`, and `--extractor-args youtube:player_client=tv_simply,default,mweb;formats=missing_pot;visitor_data=…` (harvested via hidden WebView during setup, refreshed automatically on failure).
+3. **Auto-recover on 403 / bot / sign-in error** — silently re-runs `YouTubeUpdater.updateNow()` + `YouTubeBootstrapper.harvest()`, then retries once with the fallback `player_client` chain (`web_safari,android_vr,mweb`) and yt-dlp's native HTTP downloader (skipping aria2c on the retry — it can amplify googlevideo URL drift).
+4. **CTAs on the error card** — only if recovery still fails. **Update engine & retry** for 403-class failures, **Sign in to YouTube** for genuine account-required errors (members-only, age-restricted, "Sign in to confirm…"). Sign-in opens a full-screen WebView at Google login; on success SnagLite exports the cookies and auto-retries.
 
-Most public videos work without sign-in. Age-gated, members-only, or aggressively bot-checked videos fall through to step 4.
+Most public videos work without any user action. The sign-in surface only appears on the rare videos that actually need a logged-in YouTube account.
 
 ### Install
 
@@ -219,12 +219,11 @@ Tap the gear icon on the main screen.
 
 | Action | Effect |
 |---|---|
-| **Sign in to YouTube** | Opens Google login WebView; persists cookies. |
-| **Update yt-dlp now** | Force-pulls latest stable yt-dlp. |
-| **Re-run setup** | Wipes setup flag; returns to first-launch SetupScreen. |
-| **Clear YouTube cookies** | Deletes `yt-cookies.txt` + WebView cookies; resets sign-in state. |
+| **Update download engine** | Force-pulls latest stable yt-dlp. Normally not needed — the app updates silently on launch. |
+| **Re-run initial setup** | Wipes setup flag; returns to first-launch SetupScreen. |
 | **Delete file from device when removing** | Toggles the default state of the "also delete file" checkbox in the swipe-to-remove dialog. Per-swipe override always available. |
-| Footer | Shows installed yt-dlp version. |
+
+Sign-in to YouTube isn't surfaced in Settings — it's offered automatically (as an error-card CTA) only on the rare videos that need an account.
 
 ### Defaults
 
@@ -252,7 +251,8 @@ Tap the gear icon on the main screen.
 
 ### Troubleshooting
 
-- **YouTube fails with "Please sign in" / 400 errors** — usually means primary + fallback `player_client` chains both regressed. Settings → **Update yt-dlp now**, then retry. If still failing, tap **Sign in to YouTube**.
+- **YouTube 403 Forbidden** — extractor staleness vs. current YouTube signature/n-param scheme. The app silently updates `yt-dlp` on every cold launch (wifi-only, daily debounce). On a 403 it also auto-retries with a `visitor_data` re-harvest + fallback `player_client` chain. If both still fail, the error card shows **Update engine & retry**; if that fails too, hit Settings → **Update download engine** and retry.
+- **YouTube fails with "Please sign in" / 400 errors** — primary + fallback `player_client` chains both regressed. Settings → **Update download engine**, then retry. If a video genuinely needs an account (age-restricted / members-only / "Sign in to confirm…"), the error card surfaces a **Sign in to YouTube** CTA.
 - **`Unsupported URL`** — auto-retries with `--force-generic-extractor`. If still fails, the embed host has no resolver yet — open an issue with the URL.
 - **`Couldn't extract video from <host>`** — host changed its template. Pull `adb logcat -s ResolverA ResolverB ResolverC Packer DirectDownloader` and report the URL. Resolver patterns live under [`android/app/src/main/java/com/patron/snaglite/download/resolvers/`](android/app/src/main/java/com/patron/snaglite/download/resolvers/) and updates land in minutes.
 - **First-launch setup hangs at "Updating yt-dlp"** — slow network or GitHub throttling. Failure is non-fatal; the bundled yt-dlp will still work. Retry from Settings later.

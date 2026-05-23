@@ -167,6 +167,7 @@ fun MainScreen(
                             vm.rememberPendingSignIn(item.id)
                             signInLauncher.launch(Intent(ctx, YouTubeSignInActivity::class.java))
                         },
+                        onUpdateEngine = { vm.updateEngineAndRetry(item.id) },
                     )
                 }
             }
