@@ -1,6 +1,8 @@
 package com.patron.snaglite.yt
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Log
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,38 @@ object EngineUpdateChecker {
             return null
         }
         return checkNow(ctx)
+    }
+
+    /**
+     * Fire-and-forget: if an update is due, install it silently. No UI, no
+     * AlertDialog. Skipped on metered networks by default so we don't burn the
+     * user's mobile data quota on a ~10 MB yt-dlp tarball.
+     *
+     * Called from app launch + after engine init. Idempotent: the 24 h debounce
+     * inside checkIfDue prevents back-to-back invocations from doing work.
+     */
+    suspend fun runSilentUpdateIfDue(ctx: Context, wifiOnly: Boolean = true): Boolean =
+        withContext(Dispatchers.IO) {
+            if (wifiOnly && isMeteredNetwork(ctx)) {
+                Log.i(TAG, "metered network, deferring silent update")
+                return@withContext false
+            }
+            val due = checkIfDue(ctx) ?: return@withContext false
+            Log.i(TAG, "silent update due: ${due.current} -> ${due.latest}")
+            YouTubeUpdater.updateNow(ctx)
+        }
+
+    /**
+     * True when the active network is metered (mobile data, hotspot, some VPNs).
+     * Returns false when there's no network at all — letting the update attempt
+     * proceed and fail naturally rather than silently skip in airplane mode.
+     */
+    private fun isMeteredNetwork(ctx: Context): Boolean {
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val active = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(active) ?: return false
+        return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
     suspend fun checkNow(ctx: Context): Result? = withContext(Dispatchers.IO) {

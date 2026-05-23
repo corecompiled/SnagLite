@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -64,6 +65,7 @@ fun DownloadItemCard(
     onResume: () -> Unit,
     onRequestRemove: () -> Unit,
     onSignIn: () -> Unit,
+    onUpdateEngine: () -> Unit,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -77,7 +79,7 @@ fun DownloadItemCard(
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = { SwipeBackground() },
-        content = { CardBody(item, onPause, onResume, onSignIn) },
+        content = { CardBody(item, onPause, onResume, onSignIn, onUpdateEngine) },
     )
 }
 
@@ -104,6 +106,7 @@ private fun CardBody(
     onPause: () -> Unit,
     onResume: () -> Unit,
     onSignIn: () -> Unit,
+    onUpdateEngine: () -> Unit,
 ) {
     val ctx = LocalContext.current
     Card(
@@ -142,7 +145,7 @@ private fun CardBody(
                 SecondaryLine(item)
                 StatusBlock(item.status)
             }
-            TrailingAction(item, onPause, onResume, onSignIn) { uri ->
+            TrailingAction(item, onPause, onResume, onSignIn, onUpdateEngine) { uri ->
                 runCatching {
                     ctx.startActivity(
                         Intent(Intent.ACTION_VIEW).apply {
@@ -332,6 +335,7 @@ private fun TrailingAction(
     onPause: () -> Unit,
     onResume: () -> Unit,
     onSignIn: () -> Unit,
+    onUpdateEngine: () -> Unit,
     onOpen: (android.net.Uri) -> Unit,
 ) {
     when (val s = item.status) {
@@ -363,13 +367,27 @@ private fun TrailingAction(
             }
         }
         is DownloadStatus.Error -> {
-            if (s.needsYouTubeSignIn) {
-                FilledIconButton(onClick = onSignIn) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = "Sign in & retry")
+            when {
+                s.needsYouTubeSignIn -> {
+                    FilledIconButton(onClick = onSignIn) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = "Sign in & retry")
+                    }
                 }
-            } else {
-                IconButton(onClick = onResume) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Retry")
+                s.needsEngineUpdate -> {
+                    FilledIconButton(
+                        onClick = onUpdateEngine,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ),
+                    ) {
+                        Icon(Icons.Filled.SystemUpdate, contentDescription = "Update engine & retry")
+                    }
+                }
+                else -> {
+                    IconButton(onClick = onResume) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Retry")
+                    }
                 }
             }
         }

@@ -17,7 +17,7 @@ object YouTubePrefs {
 
     private const val VISITOR_TTL_MS = 30L * 24L * 60L * 60L * 1000L
     const val UPDATE_INTERVAL_MS = 7L * 24L * 60L * 60L * 1000L
-    const val ENGINE_CHECK_INTERVAL_MS = 3L * 24L * 60L * 60L * 1000L
+    const val ENGINE_CHECK_INTERVAL_MS = 1L * 24L * 60L * 60L * 1000L
 
     private fun sp(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

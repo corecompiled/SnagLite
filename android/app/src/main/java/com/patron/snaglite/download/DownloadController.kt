@@ -7,6 +7,7 @@ import android.util.Log
 import com.patron.snaglite.SnagLiteApplication
 import com.patron.snaglite.service.DownloadService
 import com.patron.snaglite.yt.YouTubePlaylist
+import com.patron.snaglite.yt.YouTubeUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -132,6 +133,23 @@ class DownloadController(
         val id = pendingSignInId ?: return
         pendingSignInId = null
         resume(id)
+    }
+
+    /**
+     * Run a foreground yt-dlp update, then re-queue the given item. Used by the
+     * "Update engine" CTA on a 403 error card.
+     */
+    fun updateEngineAndRetry(id: String) {
+        val item = currentItem(id) ?: return
+        updateItem(id) {
+            it.copy(status = DownloadStatus.Error("Updating download engine…"))
+        }
+        scope.launch {
+            val ok = YouTubeUpdater.updateNow(app)
+            Log.i(TAG, "manual engine update on retry: ok=$ok (item=$id)")
+            // resume() expects Paused or Error; we just set Error above, so this re-queues.
+            resume(item.id)
+        }
     }
 
     private suspend fun pumpQueue() = mutex.withLock {
@@ -285,11 +303,19 @@ class DownloadController(
             }
             is DownloadResult.Failure -> {
                 if (result.needsYouTubeSignIn) pendingSignInId = id
+                val needsEngineUpdate = result.needs403Recovery && !result.needsYouTubeSignIn
+                val displayMessage = when {
+                    needsEngineUpdate ->
+                        "YouTube blocked this download (403). The engine refresh + retry didn't recover — " +
+                            "tap Update engine, or open Settings → Update download engine, then retry."
+                    else -> result.message
+                }
                 updateItem(id) {
                     it.copy(
                         status = DownloadStatus.Error(
-                            message = result.message,
+                            message = displayMessage,
                             needsYouTubeSignIn = result.needsYouTubeSignIn,
+                            needsEngineUpdate = needsEngineUpdate,
                         ),
                     )
                 }

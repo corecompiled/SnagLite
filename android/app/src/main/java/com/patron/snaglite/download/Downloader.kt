@@ -5,8 +5,10 @@ import android.net.Uri
 import android.util.Log
 import com.patron.snaglite.download.resolvers.ResolverPipeline
 import com.patron.snaglite.yt.YouTubeArgsInjector
+import com.patron.snaglite.yt.YouTubeBootstrapper
 import com.patron.snaglite.yt.YouTubeHost
 import com.patron.snaglite.yt.YouTubePrefs
+import com.patron.snaglite.yt.YouTubeUpdater
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +20,7 @@ sealed interface DownloadResult {
     data class Failure(
         val message: String,
         val needsYouTubeSignIn: Boolean = false,
+        val needs403Recovery: Boolean = false,
     ) : DownloadResult
 }
 
@@ -94,7 +97,7 @@ object Downloader {
     fun killYtDlp(processId: String): Boolean =
         runCatching { YoutubeDL.getInstance().destroyProcessById(processId) }.getOrDefault(false)
 
-    private fun ytDlpFlow(
+    private suspend fun ytDlpFlow(
         context: Context,
         url: String,
         workDir: File,
@@ -102,20 +105,28 @@ object Downloader {
         audioOnly: Boolean,
         onProgress: (Float, String) -> Unit,
     ): DownloadResult {
-        val first = runOnce(context, url, workDir, processId, audioOnly, forceGeneric = false, useFallbackClients = false, onProgress)
+        val first = runOnce(context, url, workDir, processId, audioOnly, forceGeneric = false, useFallbackClients = false, skipAria2c = false, onProgress)
         if (first is DownloadResult.Failure && first.message.contains("Unsupported URL", ignoreCase = true)) {
             Log.i(TAG, "Unsupported URL — retrying with generic extractor")
-            val retry = runOnce(context, url, workDir, processId, audioOnly, forceGeneric = true, useFallbackClients = false, onProgress)
+            val retry = runOnce(context, url, workDir, processId, audioOnly, forceGeneric = true, useFallbackClients = false, skipAria2c = false, onProgress)
             return finalize(retry, workDir, audioOnly)
         }
-        // YouTube auto-retry: if primary player_client chain produced a sign-in/bot error,
-        // silently retry once with the fallback chain before surfacing the sign-in prompt.
+        // YouTube auto-recovery: a 403 or sign-in/bot error from the primary client chain
+        // is almost always an extractor-staleness symptom. Try once more after refreshing
+        // yt-dlp + visitor_data, with the fallback client chain and yt-dlp's native HTTP
+        // downloader (aria2c can amplify URL drift). Sign-in state is orthogonal — we
+        // retry even when signed in.
         if (first is DownloadResult.Failure &&
-            first.needsYouTubeSignIn &&
+            (first.needs403Recovery || first.needsYouTubeSignIn) &&
             YouTubeHost.isYouTube(url)
         ) {
-            Log.i(TAG, "YouTube primary clients failed — retrying with fallback clients")
-            val retry = runOnce(context, url, workDir, processId, audioOnly, forceGeneric = false, useFallbackClients = true, onProgress)
+            Log.i(TAG, "YouTube blocked first attempt — refreshing engine + visitor_data then retrying")
+            onProgress(0f, "YouTube blocked download — refreshing…")
+            runCatching { YouTubeUpdater.updateNow(context) }
+                .onFailure { Log.w(TAG, "engine refresh failed: ${it.message}") }
+            runCatching { YouTubeBootstrapper.harvest(context) }
+                .onFailure { Log.w(TAG, "visitor_data refresh failed: ${it.message}") }
+            val retry = runOnce(context, url, workDir, processId, audioOnly, forceGeneric = false, useFallbackClients = true, skipAria2c = true, onProgress)
             return finalize(retry, workDir, audioOnly)
         }
         return finalize(first, workDir, audioOnly)
@@ -143,6 +154,7 @@ object Downloader {
         audioOnly: Boolean,
         forceGeneric: Boolean,
         useFallbackClients: Boolean,
+        skipAria2c: Boolean,
         onProgress: (Float, String) -> Unit,
     ): DownloadResult {
         val req = YoutubeDLRequest(url).apply {
@@ -153,8 +165,10 @@ object Downloader {
             addOption("--continue")
             addOption("--newline")
 
-            addOption("--external-downloader", "aria2c")
-            addOption("--external-downloader-args", "aria2c:-x16 -s16 -k1M --console-log-level=warn")
+            if (!skipAria2c) {
+                addOption("--external-downloader", "aria2c")
+                addOption("--external-downloader-args", "aria2c:-x16 -s16 -k1M --console-log-level=warn")
+            }
 
             if (forceGeneric) {
                 addOption("--force-generic-extractor")
@@ -182,15 +196,40 @@ object Downloader {
             if (response.exitCode == 0) {
                 DownloadResult.Success(workDir, audioOnly)
             } else {
+                val combined = response.err + "\n" + response.out
                 val msg = response.err.ifBlank { response.out.takeLast(400) }
-                val needsSignIn = YouTubeHost.isYouTube(url) &&
-                    YouTubeHost.isSignInError(response.err + "\n" + response.out) &&
+                val isYouTubeUrl = YouTubeHost.isYouTube(url)
+                val needsSignIn = isYouTubeUrl &&
+                    YouTubeHost.isSignInError(combined) &&
                     !YouTubePrefs.isSignedIn(context)
-                DownloadResult.Failure(msg, needsYouTubeSignIn = needsSignIn)
+                val needs403 = isYouTubeUrl &&
+                    !needsSignIn &&
+                    YouTubeHost.is403Error(combined)
+                DownloadResult.Failure(
+                    msg,
+                    needsYouTubeSignIn = needsSignIn,
+                    needs403Recovery = needs403,
+                )
             }
         } catch (t: Throwable) {
             Log.e(TAG, "execute() threw", t)
-            DownloadResult.Failure(t.message ?: t.javaClass.simpleName)
+            // The yausername library raises YoutubeDLException for non-zero exits
+            // instead of returning a Response, so 403 / sign-in detection has to
+            // run on the thrown message too — otherwise the recovery branch above
+            // never sees the failure mode.
+            val text = t.message ?: t.javaClass.simpleName
+            val isYouTubeUrl = YouTubeHost.isYouTube(url)
+            val needsSignIn = isYouTubeUrl &&
+                YouTubeHost.isSignInError(text) &&
+                !YouTubePrefs.isSignedIn(context)
+            val needs403 = isYouTubeUrl &&
+                !needsSignIn &&
+                YouTubeHost.is403Error(text)
+            DownloadResult.Failure(
+                text,
+                needsYouTubeSignIn = needsSignIn,
+                needs403Recovery = needs403,
+            )
         }
     }
 }

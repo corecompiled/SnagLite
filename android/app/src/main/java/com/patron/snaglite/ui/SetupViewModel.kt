@@ -7,6 +7,9 @@ import com.patron.snaglite.SnagLiteApplication
 import com.patron.snaglite.yt.YouTubeBootstrapper
 import com.patron.snaglite.yt.YouTubePrefs
 import com.patron.snaglite.yt.YouTubeUpdater
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,13 +48,23 @@ class SetupViewModel(private val app: Application) : AndroidViewModel(app) {
                 val ok = sapp.ensureEngines()
                 if (!ok) error(sapp.initError ?: "engine init failed")
             }
-            runStep("ytdlp") {
-                YouTubeUpdater.updateNow(app)
-                // failure non-fatal: the bundled yt-dlp still works; mark Done
-            }
-            runStep("youtube") {
-                YouTubeBootstrapper.harvest(app)
-                // failure non-fatal: extractor args still work without visitor_data
+            // ytdlp + visitor_data harvest are independent — yt-dlp update writes
+            // to internal storage, harvest hits a hidden WebView on the main
+            // thread. Run them concurrently to cut perceived setup latency.
+            coroutineScope {
+                val ytdlp = async {
+                    runStep("ytdlp") {
+                        YouTubeUpdater.updateNow(app)
+                        // failure non-fatal: the bundled yt-dlp still works; mark Done
+                    }
+                }
+                val youtube = async {
+                    runStep("youtube") {
+                        YouTubeBootstrapper.harvest(app)
+                        // failure non-fatal: extractor args still work without visitor_data
+                    }
+                }
+                awaitAll(ytdlp, youtube)
             }
             runStep("notif") {
                 requestNotifPermission()

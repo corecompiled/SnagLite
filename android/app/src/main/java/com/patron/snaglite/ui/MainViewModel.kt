@@ -39,4 +39,5 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
 
     fun rememberPendingSignIn(id: String) = sapp.downloads.rememberPendingSignIn(id)
     fun onSignInComplete() = sapp.downloads.retryAfterSignIn()
+    fun updateEngineAndRetry(id: String) = sapp.downloads.updateEngineAndRetry(id)
 }
