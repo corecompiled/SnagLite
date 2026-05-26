@@ -36,7 +36,7 @@ First invocation auto-downloads `yt-dlp.exe`, `ffmpeg.exe`, and `aria2c.exe` to 
 - **Fast by default.** `aria2c -x16 -s16 -k1M` pulls files in parallel chunks — usually a 3–8× speedup over single-connection HTTP.
 - **Handles awkward sites.** When yt-dlp can't crack a host, SnagLite retries once with the generic extractor, and a small custom resolver pipeline handles a handful of common iframe-wrapper sites the bundled extractors miss.
 - **Android background reliability.** Holds a partial wake lock + high-perf Wi-Fi lock for the duration of a download, and prompts to add itself to the battery-optimisation exemption list on first launch so long downloads survive doze mode.
-- **Stays current.** `snaglite update` pulls the latest yt-dlp release; the Android app does the same automatically every week (yt-dlp ships extractor fixes daily).
+- **Stays current.** Both builds silently auto-update `yt-dlp` on a 7-day debounce per cold launch (yt-dlp ships extractor fixes daily). Manual `snaglite update` is also available on the CLI.
 - **No telemetry, no accounts, no nags.** Ever.
 
 > Inspired by [ytdlnis](https://github.com/deniscerri/ytdlnis). Previously known as **Snag** — see [Migrating from Snag](#migrating-from-snag) below for the rename details.
@@ -128,7 +128,8 @@ snaglite <url> --no-aria2                # use yt-dlp's native downloader instea
 
 ### Troubleshooting
 
-- **`Unsupported URL`** — `snaglite update` to refresh yt-dlp, then retry. The CLI auto-retries once with the generic extractor on this error before giving up.
+- **`Unsupported URL`** — auto-retries once with the generic extractor before surfacing the error.
+- **YouTube 403 / sign-in error** — auto-recovers: silently re-updates yt-dlp, then retries once with a fallback `player_client` chain (`web_safari,android_vr,mweb`) and yt-dlp's native HTTP downloader (skipping aria2c, which can amplify googlevideo URL drift). Persistent failure usually means yt-dlp itself needs a manual `snaglite update`; cookies / sign-in are out of scope for the CLI by design (see Android for the WebView sign-in fallback).
 - **Geo-blocked** — yt-dlp's `--geo-bypass` is on by default; if a site requires actual VPN-level bypass it will still fail. Use a VPN.
 - **Slow downloads** — confirm aria2c is in use via `snaglite where`. Pass `--no-aria2` only if a CDN throttles parallel connections.
 - **Tool download fails** — corporate proxy, firewall, or GitHub rate limit. Manually drop `yt-dlp.exe`, `ffmpeg.exe`, and `aria2c.exe` into `%LOCALAPPDATA%\SnagLite\bin`.

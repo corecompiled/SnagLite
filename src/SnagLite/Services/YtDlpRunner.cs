@@ -1,3 +1,4 @@
+using System.Text;
 using CliWrap;
 using CliWrap.EventStream;
 using Spectre.Console;
@@ -12,6 +13,7 @@ public sealed record YtDlpOptions
     public string? FormatOverride { get; init; }
     public bool UseAria2 { get; init; } = true;
     public bool ForceGeneric { get; init; }
+    public IEnumerable<string>? ExtraArgs { get; init; }
 }
 
 public sealed class YtDlpResult
@@ -26,7 +28,7 @@ public static class YtDlpRunner
     {
         var args = BuildArgs(opt);
 
-        var lastError = "";
+        var stderrBuf = new StringBuilder();
         AnsiConsole.MarkupLine($"[grey]→ {opt.Url}[/]");
 
         var exit = await AnsiConsole.Progress()
@@ -59,7 +61,7 @@ public static class YtDlpRunner
                         case StandardErrorCommandEvent stderr:
                             if (!string.IsNullOrWhiteSpace(stderr.Text))
                             {
-                                lastError = stderr.Text;
+                                stderrBuf.AppendLine(stderr.Text);
                                 if (stderr.Text.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
                                     AnsiConsole.MarkupLineInterpolated($"[red]{stderr.Text}[/]");
                             }
@@ -77,7 +79,7 @@ public static class YtDlpRunner
                 return code;
             });
 
-        return new YtDlpResult { ExitCode = exit, LastError = lastError };
+        return new YtDlpResult { ExitCode = exit, LastError = stderrBuf.ToString() };
     }
 
     private static void HandleLine(string line, ProgressTask task)
@@ -155,6 +157,11 @@ public static class YtDlpRunner
         {
             args.Add("-f"); args.Add("bv*+ba/b");
             args.Add("--merge-output-format"); args.Add("mp4");
+        }
+
+        if (opt.ExtraArgs is not null)
+        {
+            foreach (var ea in opt.ExtraArgs) args.Add(ea);
         }
 
         return args;
