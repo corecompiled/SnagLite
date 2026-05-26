@@ -2,6 +2,7 @@ using System.ComponentModel;
 using SnagLite.Config;
 using SnagLite.Services;
 using SnagLite.Services.Resolvers;
+using SnagLite.Services.YouTube;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -48,6 +49,8 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
         await ToolResolver.EnsureAllAsync(cts.Token);
+
+        var engineCheck = EngineUpdateChecker.MaybeUpdateAsync(cts.Token);
 
         var cfg = AppConfig.Load();
         var outDir = cfg.ResolveOutputDir(settings.OutputDir);
@@ -121,16 +124,37 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
             FormatOverride = settings.Format,
             UseAria2 = !settings.NoAria2,
             ForceGeneric = false,
+            ExtraArgs = YouTubeArgsInjector.ExtraArgs(workUrl.ToString(), useFallbackClients: false),
         };
 
         var result = await YtDlpRunner.RunAsync(opts, cts.Token);
 
-        if (result.ExitCode != 0 &&
-            result.LastError.Contains("Unsupported URL", StringComparison.OrdinalIgnoreCase))
+        if (result.ExitCode != 0)
         {
-            AnsiConsole.MarkupLine("[yellow]Unsupported URL — retrying with generic extractor...[/]");
-            result = await YtDlpRunner.RunAsync(opts with { ForceGeneric = true }, cts.Token);
+            if (YouTubeHost.IsYouTube(opts.Url) &&
+                (YouTubeHost.Is403Error(result.LastError) || YouTubeHost.IsSignInError(result.LastError)))
+            {
+                AnsiConsole.MarkupLine("[yellow]YouTube 403 / sign-in — refreshing engine and retrying with fallback player_client chain...[/]");
+                try { await ToolResolver.ForceUpdateYtDlpAsync(cts.Token); }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLineInterpolated($"[yellow]Engine refresh failed ({ex.Message}); retrying anyway.[/]");
+                }
+                result = await YtDlpRunner.RunAsync(opts with
+                {
+                    UseAria2 = false,
+                    ExtraArgs = YouTubeArgsInjector.ExtraArgs(opts.Url, useFallbackClients: true),
+                }, cts.Token);
+            }
+            else if (result.LastError.Contains("Unsupported URL", StringComparison.OrdinalIgnoreCase))
+            {
+                AnsiConsole.MarkupLine("[yellow]Unsupported URL — retrying with generic extractor...[/]");
+                result = await YtDlpRunner.RunAsync(opts with { ForceGeneric = true }, cts.Token);
+            }
         }
+
+        try { await engineCheck.WaitAsync(TimeSpan.FromSeconds(10)); }
+        catch { }
 
         if (result.ExitCode == 0)
         {

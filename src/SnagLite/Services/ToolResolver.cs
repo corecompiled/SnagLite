@@ -65,6 +65,30 @@ public static class ToolResolver
         AnsiConsole.MarkupLine("[green]✓[/] yt-dlp updated");
     }
 
+    /// Silent (no UI) yt-dlp refresh. Downloads to a side file, then swaps in.
+    /// If yt-dlp.exe is currently executing the swap will fail with IOException
+    /// — that's expected and surfaced to the caller, which should swallow it.
+    public static async Task SilentRefreshYtDlpAsync(CancellationToken ct = default)
+    {
+        Paths.EnsureDir(Paths.BinDir);
+        var tmp = Paths.YtDlp + ".new";
+        await using (var src = await Http.GetStreamAsync(YtDlpUrl, ct))
+        await using (var dst = File.Create(tmp))
+        {
+            await src.CopyToAsync(dst, ct);
+        }
+        try
+        {
+            if (File.Exists(Paths.YtDlp)) File.Delete(Paths.YtDlp);
+            File.Move(tmp, Paths.YtDlp);
+        }
+        catch
+        {
+            if (File.Exists(tmp)) { try { File.Delete(tmp); } catch { } }
+            throw;
+        }
+    }
+
     private static async Task FetchYtDlpAsync(CancellationToken ct)
     {
         await using var src = await Http.GetStreamAsync(YtDlpUrl, ct);
