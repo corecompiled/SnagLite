@@ -48,7 +48,7 @@ jobs:
           if-no-files-found: error
 
   build-android:
-    name: Build Android debug APKs
+    name: Build Android release APKs
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -79,14 +79,30 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build debug APKs
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Decode release keystore
+        env:
+          KS_B64: ${{ secrets.SNAGLITE_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KS_B64:-}" ]; then
+            echo "::error::SNAGLITE_KEYSTORE_B64 secret is empty; cannot build release-signed APKs."
+            exit 1
+          fi
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/snaglite-release.jks"
+          echo "SNAGLITE_KEYSTORE_PATH=$RUNNER_TEMP/snaglite-release.jks" >> "$GITHUB_ENV"
 
-      - name: Upload debug APKs
+      - name: Build release APKs
+        env:
+          SNAGLITE_KEYSTORE_PASS: ${{ secrets.SNAGLITE_KEYSTORE_PASS }}
+          SNAGLITE_KEY_ALIAS:     ${{ secrets.SNAGLITE_KEY_ALIAS }}
+          SNAGLITE_KEY_PASS:      ${{ secrets.SNAGLITE_KEY_PASS }}
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Upload release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: android-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: android-release
+          path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
   publish:
@@ -106,7 +122,7 @@ jobs:
           set -euo pipefail
           mkdir -p release
           cp "dist/win-x64/snaglite.exe" "release/snaglite-${{ inputs.tag }}-win-x64.exe"
-          for f in dist/android-debug/*.apk; do
+          for f in dist/android-release/*.apk; do
             base=$(basename "$f" .apk)
             cp "$f" "release/snaglite-${{ inputs.tag }}-${base#app-}.apk"
           done

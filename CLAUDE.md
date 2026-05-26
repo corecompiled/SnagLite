@@ -49,9 +49,9 @@ Three GitHub Actions workflows live under `.github/workflows/`:
 |---|---|---|
 | `dotnet-cli.yml` | push / PR to `src/**` | `snaglite.exe` as 90-day Actions artifact |
 | `android-debug.yml` | push / PR to `android/**` | 4 debug APKs as 90-day Actions artifact |
-| `release.yml` | **manual only** (`workflow_dispatch`) | `snaglite.exe` + 4 debug APKs attached to a new GitHub Release. Inputs: `tag` (required, e.g. `v0.1.0`), `prerelease` (bool, default false), `notes` (Markdown; auto-generated from commits if blank). Asset filenames are rewritten to include the tag (`snaglite-<tag>-win-x64.exe`, `snaglite-<tag>-<abi>-debug.apk`). User-facing runbook lives in the README **Cutting a release** section. |
+| `release.yml` | **manual only** (`workflow_dispatch`) | `snaglite.exe` + 4 release-signed APKs attached to a new GitHub Release. Inputs: `tag` (required, e.g. `v0.1.0`), `prerelease` (bool, default false), `notes` (Markdown; auto-generated from commits if blank). Asset filenames are rewritten to include the tag (`snaglite-<tag>-win-x64.exe`, `snaglite-<tag>-<abi>-release.apk`). User-facing runbook lives in the README **Cutting a release** section. |
 
-Release-signed (production) APKs are not wired into `release.yml` yet — it builds `assembleDebug`. Promoting to `assembleRelease` is a one-line swap once the four signing env vars are added as GitHub Secrets (`SNAGLITE_KEYSTORE_PATH/_PASS/_ALIAS`, `SNAGLITE_KEY_PASS`) and the keystore is uploaded as a base64-encoded secret + decoded in a step before the Gradle invocation.
+Release signing is wired into `release.yml`: four GitHub Secrets — `SNAGLITE_KEYSTORE_B64` (base64 of the `.jks` file), `SNAGLITE_KEYSTORE_PASS`, `SNAGLITE_KEY_ALIAS`, `SNAGLITE_KEY_PASS` — drive the build. The "Decode release keystore" step writes the `.jks` to `$RUNNER_TEMP/snaglite-release.jks` and exports `SNAGLITE_KEYSTORE_PATH` via `$GITHUB_ENV`, so the subsequent `./gradlew :app:assembleRelease` invocation picks up all four env vars the `signingConfigs.release` block in `android/app/build.gradle.kts` expects. Missing `SNAGLITE_KEYSTORE_B64` is fail-fast — workflow halts rather than silently shipping debug-signed APKs. Keystore generation recipe is in `PRIVATE_NOTES.local.md`.
 
 ## Runtime data
 
@@ -75,9 +75,9 @@ First-run migration is automatic on both platforms:
 
 ## Android release signing
 
-`signingConfigs.release` reads four env vars: `SNAGLITE_KEYSTORE_PATH/_PASS/_ALIAS`, `SNAGLITE_KEY_PASS`. All four set + keystore exists → signed `app-{arm64-v8a,armeabi-v7a,x86_64,universal}-release.apk`. Otherwise Gradle prints one-line warning and falls back to local debug keystore so OSS clones still build. `proguard-rules.pro` already keeps `com.yausername.**` and `io.github.junkfood02.**`; Coil 3 + OkHttp 4 ship consumer rules. See `PRIVATE_NOTES.local.md` for `keytool` recipe + PowerShell env-var snippet.
+`signingConfigs.release` reads four env vars: `SNAGLITE_KEYSTORE_PATH/_PASS/_ALIAS`, `SNAGLITE_KEY_PASS`. All four set + keystore exists → signed `app-{arm64-v8a,armeabi-v7a,x86_64,universal}-release.apk`. Otherwise Gradle prints one-line warning and falls back to local debug keystore so OSS clones still build. `proguard-rules.pro` keeps `com.yausername.**`, `io.github.junkfood02.**`, the commons-compress `AsiExtraField` + `ExtraFieldUtils` reflection surface, Compose runtime/ui, kotlinx.coroutines, Coil 3, OkHttp, and `com.patron.snaglite.**`. See `PRIVATE_NOTES.local.md` for `keytool` recipe + PowerShell env-var snippet.
 
-> **R8 currently disabled.** Release has `isMinifyEnabled = false` + `isShrinkResources = false` while diagnosing a launch-time crash on Android 14. Re-enable both alongside additional keep rules (Coil 3, Compose runtime reflection, kotlinx.coroutines, OkHttp) once the baseline is confirmed good. The `proguardFiles(...)` line is kept in place so flipping the flags back is a one-line revert.
+R8 + resource shrinker are **enabled** (`isMinifyEnabled = true` + `isShrinkResources = true`). A prior launch-time crash on Android 14 traced to commons-compress reflective loading being stripped; the `AsiExtraField` keep rule (plus the broader keep set above) is what unblocked re-enabling. If a future launch regression surfaces under R8, the `proguardFiles(...)` line and the keep block are the things to widen first.
 
 ## Android diagnostics
 
