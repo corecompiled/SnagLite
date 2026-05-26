@@ -181,7 +181,7 @@ Most public videos work without any user action. The sign-in surface only appear
 
 ### Install
 
-Pre-built debug APKs are attached to each entry on the [Releases page](https://github.com/corecompiled/SnagLite/releases) — pick the variant for your device and sideload. To build locally instead, build artifacts land in `android/app/build/outputs/apk/`:
+Pre-built release-signed APKs are attached to each entry on the [Releases page](https://github.com/corecompiled/SnagLite/releases) — pick the variant for your device and sideload. To build locally instead, build artifacts land in `android/app/build/outputs/apk/`:
 
 | APK | Use case |
 |---|---|
@@ -200,7 +200,7 @@ cd android
 .\gradlew.bat :app:assembleRelease        # release APKs in app/build/outputs/apk/release/
 ```
 
-The release build is signed with a release keystore if four env vars are set; otherwise it falls back to the local debug keystore (with a Gradle warning). R8 / resource-shrink is currently disabled in `release` while a launch-time crash on Android 14 is being diagnosed — see `CLAUDE.md` for context.
+The release build is signed with a release keystore if four env vars are set; otherwise it falls back to the local debug keystore (with a Gradle warning). R8 + resource shrinking are enabled for `release`; keep rules live in `android/app/proguard-rules.pro`.
 
 | Env var | Purpose |
 |---|---|
@@ -282,14 +282,14 @@ Releases (`snaglite.exe` + 4 debug APKs, attached to a tag at https://github.com
 7. Wait 5–10 minutes. The workflow runs three jobs in order: `build-win` and `build-android` in parallel, then `publish`.
 8. When it goes green, the release appears at **https://github.com/corecompiled/SnagLite/releases** with 5 attached assets:
    - `snaglite-<tag>-win-x64.exe`
-   - `snaglite-<tag>-arm64-v8a-debug.apk`
-   - `snaglite-<tag>-armeabi-v7a-debug.apk`
-   - `snaglite-<tag>-x86_64-debug.apk`
-   - `snaglite-<tag>-universal-debug.apk`
+   - `snaglite-<tag>-arm64-v8a-release.apk`
+   - `snaglite-<tag>-armeabi-v7a-release.apk`
+   - `snaglite-<tag>-x86_64-release.apk`
+   - `snaglite-<tag>-universal-release.apk`
 
 To **delete** a release (e.g. typo in the tag): on the Releases page, click the release title → trash icon. Then on the Tags page, delete the matching tag — otherwise re-running the workflow with the same tag fails with a tag-already-exists error.
 
-> APKs are currently **debug-signed** — installable, but a different signature from any future release-signed build, so users will need to uninstall before upgrading across a debug → release transition. Wiring up release signing in CI requires uploading the keystore + four passwords as GitHub Secrets; see `CLAUDE.md` for the upgrade path.
+> APKs are **release-signed** with a stable certificate, so in-place upgrades work across releases going forward. Anyone who has an older **debug-signed** APK installed (from a release cut before the signing flip) must uninstall it first — Android will refuse to upgrade across a signature change with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. One-time pain; subsequent upgrades are seamless.
 
 ---
 
