@@ -281,11 +281,11 @@ Releases (`snaglite.exe` + 4 debug APKs, attached to a tag at https://github.com
 6. Click the green **Run workflow** button.
 7. Wait 5–10 minutes. The workflow runs three jobs in order: `build-win` and `build-android` in parallel, then `publish`.
 8. When it goes green, the release appears at **https://github.com/corecompiled/SnagLite/releases** with 5 attached assets:
-   - `snaglite-<tag>-win-x64.exe`
-   - `snaglite-<tag>-arm64-v8a-release.apk`
-   - `snaglite-<tag>-armeabi-v7a-release.apk`
-   - `snaglite-<tag>-x86_64-release.apk`
-   - `snaglite-<tag>-universal-release.apk`
+   - `snaglite-<tag>-android-arm64-v8a-release.apk`
+   - `snaglite-<tag>-android-armeabi-v7a-release.apk`
+   - `snaglite-<tag>-android-universal-release.apk`
+   - `snaglite-<tag>-android-x86_64-release.apk`
+   - `snaglite-<tag>-windows-x64.exe`
 
 To **delete** a release (e.g. typo in the tag): on the Releases page, click the release title → trash icon. Then on the Tags page, delete the matching tag — otherwise re-running the workflow with the same tag fails with a tag-already-exists error.
 

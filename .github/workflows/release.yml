@@ -121,10 +121,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          cp "dist/win-x64/snaglite.exe" "release/snaglite-${{ inputs.tag }}-win-x64.exe"
+          cp "dist/win-x64/snaglite.exe" "release/snaglite-${{ inputs.tag }}-windows-x64.exe"
           for f in dist/android-release/*.apk; do
             base=$(basename "$f" .apk)
-            cp "$f" "release/snaglite-${{ inputs.tag }}-${base#app-}.apk"
+            cp "$f" "release/snaglite-${{ inputs.tag }}-android-${base#app-}.apk"
           done
           ls -lh release/
 
