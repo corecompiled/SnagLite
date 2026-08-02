@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.patron.snaglite.ui.MainScreen
 import com.patron.snaglite.ui.MainViewModel
 import com.patron.snaglite.ui.SetupScreen
@@ -46,14 +47,14 @@ class MainActivity : ComponentActivity() {
                     val app = application as SnagLiteApplication
                     var setupDone by remember { mutableStateOf(YouTubePrefs.isSetupComplete(this)) }
                     if (!setupDone) {
-                        val vm = remember { SetupViewModel(app) }
+                        val vm: SetupViewModel = viewModel()
                         SetupScreen(
                             vm = vm,
                             onDone = { setupDone = true },
                             requestNotifPermission = { requestNotificationPermission() },
                         )
                     } else {
-                        val vm = remember { MainViewModel(app) }
+                        val vm: MainViewModel = viewModel()
                         MainScreen(
                             vm = vm,
                             onResetSetup = {

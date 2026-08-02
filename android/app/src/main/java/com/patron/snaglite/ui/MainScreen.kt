@@ -1,6 +1,7 @@
 package com.patron.snaglite.ui
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +65,8 @@ fun MainScreen(
             vm.onSignInComplete()
         }
     }
+
+    BackHandler(enabled = showSettings) { showSettings = false }
 
     if (showSettings) {
         SettingsScreen(

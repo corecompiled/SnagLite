@@ -31,6 +31,13 @@ data class SetupUiState(
 
 class SetupViewModel(private val app: Application) : AndroidViewModel(app) {
 
+    /**
+     * The ViewModel now outlives the composition, so `LaunchedEffect(Unit)` in
+     * SetupScreen re-fires on every configuration change. Setup must run once
+     * per ViewModel instance, not once per composition.
+     */
+    private var started = false
+
     private val initial = listOf(
         SetupStep("engines", "Installing download engine"),
         SetupStep("ytdlp", "Updating download engine"),
@@ -42,6 +49,8 @@ class SetupViewModel(private val app: Application) : AndroidViewModel(app) {
     val state: StateFlow<SetupUiState> = _state.asStateFlow()
 
     fun start(requestNotifPermission: suspend () -> Unit) {
+        if (started) return
+        started = true
         viewModelScope.launch {
             runStep("engines") {
                 val sapp = app as SnagLiteApplication
