@@ -1,8 +1,7 @@
 [versions]
 # Toolchain
-agp = "8.5.2"
-kotlin = "1.9.24"
-composeCompiler = "1.5.14"
+agp = "8.13.2"
+kotlin = "2.2.20"
 
 # SDK levels
 compileSdk = "34"
@@ -46,3 +45,4 @@ youtubedl-aria2c = { group = "io.github.junkfood02.youtubedl-android", name = "a
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
