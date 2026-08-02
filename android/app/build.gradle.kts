@@ -1,16 +1,16 @@
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "com.patron.snaglite"
-    compileSdk = 34
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
         applicationId = "com.patron.snaglite"
-        minSdk = 26
-        targetSdk = 34
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
         vectorDrawables { useSupportLibrary = true }
@@ -66,7 +66,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     buildFeatures { compose = true }
-    composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
+    composeOptions { kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get() }
 
     splits {
         abi {
@@ -88,26 +88,26 @@ android {
 }
 
 dependencies {
-    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
-    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
-    implementation("io.github.junkfood02.youtubedl-android:aria2c:0.18.1")
+    implementation(libs.youtubedl.library)
+    implementation(libs.youtubedl.ffmpeg)
+    implementation(libs.youtubedl.aria2c)
 
-    val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
+    val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.extended)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.tooling.preview)
+    debugImplementation(libs.compose.ui.tooling)
 
-    implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.activity:activity-compose:1.9.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.okhttp)
 
-    implementation("io.coil-kt.coil3:coil-compose:3.0.4")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 }
