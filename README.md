@@ -180,6 +180,11 @@ YouTube actively blocks anonymous requests. SnagLite handles this transparently 
 
 Most public videos work without any user action. The sign-in surface only appears on the rare videos that actually need a logged-in YouTube account.
 
+Your YouTube session never leaves the device. The cookie jar SnagLite hands to
+yt-dlp, the WebView's own cookie database, and the `snaglite_yt` preference file
+are all excluded from Android's cloud backup and from device-to-device transfer.
+Signing in on a new device means signing in again — by design.
+
 ### Install
 
 Pre-built release-signed APKs are attached to each entry on the [Releases page](https://github.com/corecompiled/SnagLite/releases) — pick the variant for your device and sideload. To build locally instead, build artifacts land in `android/app/build/outputs/apk/`:

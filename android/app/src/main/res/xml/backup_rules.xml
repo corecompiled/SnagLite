@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto Backup exclusions for API 30 and below.
+  Keep in sync with res/xml/data_extraction_rules.xml (API 31+).
+
+  yt-cookies.txt is a live Netscape-format YouTube session cookie jar written by
+  CookieStore. app_webview holds the WebView's own cookie database, populated by
+  YouTubeSignInActivity. snaglite_yt holds visitor_data and sign-in state. None of
+  these may leave the device.
+-->
+<full-backup-content>
+    <exclude domain="file" path="yt-cookies.txt" />
+    <exclude domain="root" path="app_webview" />
+    <exclude domain="sharedpref" path="snaglite_yt.xml" />
+</full-backup-content>
