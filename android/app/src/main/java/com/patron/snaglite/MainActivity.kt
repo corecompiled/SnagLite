@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,9 +52,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            SnagLiteTheme {
+            val app = application as SnagLiteApplication
+            val themeMode by app.themeMode.collectAsState()
+            SnagLiteTheme(mode = themeMode) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    val app = application as SnagLiteApplication
                     var setupDone by remember { mutableStateOf(YouTubePrefs.isSetupComplete(this)) }
                     if (!setupDone) {
                         val vm: SetupViewModel = viewModel()
