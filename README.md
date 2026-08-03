@@ -149,7 +149,10 @@ Kotlin + Jetpack Compose APK. Wraps the same `yt-dlp` + `ffmpeg` + `aria2c` engi
 
 **Android requirements:** Android 8.0 (API 26) or newer. Built against
 Android 16 (API 36), so the app draws edge-to-edge behind the status and
-navigation bars and supports the predictive back gesture on Android 14+.
+navigation bars. The system back gesture works throughout — Settings backs out
+to the download list, and back again leaves the app; Android 14+'s animated
+predictive-back preview shows only when leaving the app, not when backing out
+of Settings.
 
 ### What it does
 
