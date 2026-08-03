@@ -1,6 +1,5 @@
 package com.patron.snaglite.ui
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,95 +42,84 @@ fun SettingsScreen(
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var updating by remember { mutableStateOf(false) }
     var deleteFileOnRemove by remember { mutableStateOf(SnagLitePrefs.deleteFileOnRemove(ctx)) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    SnagLiteScaffold(
+        title = "Settings",
+        snackbarHostState = snackbarHostState,
+        navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
-            Text("Settings", style = MaterialTheme.typography.headlineSmall)
-        }
-
-        Text(
-            "Downloads",
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+        },
+    ) { inner ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(inner)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Delete file from device when removing",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    "Pre-checks the box in the swipe-to-remove dialog. You can still flip it per-download.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text("Downloads", style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Delete file from device when removing",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "Pre-checks the box in the swipe-to-remove dialog. You can still flip it per-download.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = deleteFileOnRemove,
+                    onCheckedChange = {
+                        deleteFileOnRemove = it
+                        SnagLitePrefs.setDeleteFileOnRemove(ctx, it)
+                    },
                 )
             }
-            Switch(
-                checked = deleteFileOnRemove,
-                onCheckedChange = {
-                    deleteFileOnRemove = it
-                    SnagLitePrefs.setDeleteFileOnRemove(ctx, it)
+
+            HorizontalDivider()
+
+            Text("Maintenance", style = MaterialTheme.typography.titleMedium)
+            Button(
+                onClick = {
+                    if (updating) return@Button
+                    updating = true
+                    scope.launch {
+                        val ok = YouTubeUpdater.updateNow(ctx)
+                        updating = false
+                        snackbarHostState.showSnackbar(
+                            if (ok) "Download engine updated."
+                            else "Could not update the download engine.",
+                        )
+                    }
                 },
-            )
+                enabled = !updating,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (updating) "Updating…" else "Update download engine") }
+
+            OutlinedButton(
+                onClick = onReRunSetup,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Re-run initial setup") }
+
+            HorizontalDivider()
+
+            Text("About", style = MaterialTheme.typography.titleMedium)
+            Text("SnagLite — Version 1.0", style = MaterialTheme.typography.bodyMedium)
+            Text("Developed by Paolo Patron.", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(8.dp))
         }
-
-        HorizontalDivider()
-
-        Text(
-            "Maintenance",
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Button(
-            onClick = {
-                if (updating) return@Button
-                updating = true
-                scope.launch {
-                    val ok = YouTubeUpdater.updateNow(ctx)
-                    updating = false
-                    Toast.makeText(
-                        ctx,
-                        if (ok) "Download engine updated." else "Could not update the download engine.",
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
-            },
-            enabled = !updating,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (updating) "Updating…" else "Update download engine") }
-
-        OutlinedButton(
-            onClick = onReRunSetup,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Re-run initial setup") }
-
-        HorizontalDivider()
-
-        Text(
-            "About",
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            "SnagLite — Version 1.0",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Text(
-            "Developed by Paolo Patron.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(Modifier.height(8.dp))
     }
 }

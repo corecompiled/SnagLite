@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -83,108 +85,109 @@ fun MainScreen(
     }
 
     val hasFinished = items.any { it.isTerminal }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                "SnagLite",
-                style = MaterialTheme.typography.headlineLarge,
-                modifier = Modifier.weight(1f),
-            )
+    SnagLiteScaffold(
+        title = "SnagLite",
+        snackbarHostState = snackbarHostState,
+        actions = {
             IconButton(onClick = { showSettings = true }) {
                 Icon(Icons.Filled.Settings, contentDescription = "Settings")
             }
-        }
-
-        OutlinedTextField(
-            value = url,
-            onValueChange = { url = it },
-            label = { Text("Video URL") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            trailingIcon = {
-                IconButton(onClick = {
-                    scope.launch {
-                        clipboard.getClipEntry()
-                            ?.clipData
-                            ?.takeIf { it.itemCount > 0 }
-                            ?.getItemAt(0)
-                            ?.coerceToText(ctx)
-                            ?.toString()
-                            ?.trim()
-                            ?.takeIf { it.isNotEmpty() }
-                            ?.let { url = it }
+        },
+    ) { inner ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(inner)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                label = { Text("Video URL") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                trailingIcon = {
+                    IconButton(onClick = {
+                        scope.launch {
+                            clipboard.getClipEntry()
+                                ?.clipData
+                                ?.takeIf { it.itemCount > 0 }
+                                ?.getItemAt(0)
+                                ?.coerceToText(ctx)
+                                ?.toString()
+                                ?.trim()
+                                ?.takeIf { it.isNotEmpty() }
+                                ?.let { url = it }
+                        }
+                    }) {
+                        Icon(Icons.Filled.ContentPaste, contentDescription = "Paste")
                     }
-                }) {
-                    Icon(Icons.Filled.ContentPaste, contentDescription = "Paste")
-                }
-            },
-        )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            val entries = FormatChoice.entries
-            entries.forEachIndexed { idx, choice ->
-                SegmentedButton(
-                    selected = format == choice,
-                    onClick = { vm.setFormat(choice) },
-                    shape = SegmentedButtonDefaults.itemShape(idx, entries.size),
-                ) {
-                    Text(if (choice == FormatChoice.Video) "Video" else "Audio")
-                }
-            }
-        }
-        Button(
-            onClick = {
-                vm.enqueue(url)
-                url = ""
-            },
-            enabled = url.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Download") }
-
-        if (items.isEmpty()) {
-            Text(
-                "Paste a link, tap Download. Up to 3 downloads run at once; swipe to remove.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                },
             )
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "Downloads",
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.weight(1f),
-                )
-                if (hasFinished) {
-                    TextButton(onClick = { vm.clearFinished() }) {
-                        Text("Clear finished")
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                val entries = FormatChoice.entries
+                entries.forEachIndexed { idx, choice ->
+                    SegmentedButton(
+                        selected = format == choice,
+                        onClick = { vm.setFormat(choice) },
+                        shape = SegmentedButtonDefaults.itemShape(idx, entries.size),
+                    ) {
+                        Text(if (choice == FormatChoice.Video) "Video" else "Audio")
                     }
                 }
             }
-            LazyColumn(
+            Button(
+                onClick = {
+                    vm.enqueue(url)
+                    url = ""
+                },
+                enabled = url.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(items, key = { it.id }) { item ->
-                    DownloadItemCard(
-                        item = item,
-                        onPause = { vm.pause(item.id) },
-                        onResume = { vm.resume(item.id) },
-                        onRequestRemove = { pendingRemoval = item },
-                        onSignIn = {
-                            vm.rememberPendingSignIn(item.id)
-                            signInLauncher.launch(Intent(ctx, YouTubeSignInActivity::class.java))
-                        },
-                        onUpdateEngine = { vm.updateEngineAndRetry(item.id) },
+            ) { Text("Download") }
+
+            if (items.isEmpty()) {
+                Text(
+                    "Paste a link, tap Download. Up to 3 downloads run at once; swipe to remove.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Downloads",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f),
                     )
+                    if (hasFinished) {
+                        TextButton(onClick = { vm.clearFinished() }) {
+                            Text("Clear finished")
+                        }
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(items, key = { it.id }) { item ->
+                        DownloadItemCard(
+                            item = item,
+                            onPause = { vm.pause(item.id) },
+                            onResume = { vm.resume(item.id) },
+                            onRequestRemove = { pendingRemoval = item },
+                            onSignIn = {
+                                vm.rememberPendingSignIn(item.id)
+                                signInLauncher.launch(Intent(ctx, YouTubeSignInActivity::class.java))
+                            },
+                            onUpdateEngine = { vm.updateEngineAndRetry(item.id) },
+                        )
+                    }
                 }
             }
         }
