@@ -18,10 +18,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.patron.snaglite.BuildConfig
+import com.patron.snaglite.SnagLiteApplication
 import com.patron.snaglite.download.SnagLitePrefs
 import com.patron.snaglite.yt.YouTubeUpdater
 import kotlinx.coroutines.launch
@@ -41,6 +47,8 @@ fun SettingsScreen(
     onReRunSetup: () -> Unit,
 ) {
     val ctx = LocalContext.current
+    val sapp = ctx.applicationContext as SnagLiteApplication
+    val themeMode by sapp.themeMode.collectAsState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -91,6 +99,34 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
+            Text("Appearance", style = MaterialTheme.typography.titleMedium)
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                val modes = ThemeMode.entries
+                modes.forEachIndexed { idx, mode ->
+                    SegmentedButton(
+                        selected = themeMode == mode,
+                        onClick = { sapp.setThemeMode(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(idx, modes.size),
+                    ) {
+                        Text(
+                            when (mode) {
+                                ThemeMode.System -> "System"
+                                ThemeMode.Light -> "Light"
+                                ThemeMode.Dark -> "Dark"
+                            },
+                        )
+                    }
+                }
+            }
+            Text(
+                "Applies to the app straight away. The brief window-background frame shown " +
+                    "while the app is cold-launching still follows the system setting.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            HorizontalDivider()
+
             Text("Maintenance", style = MaterialTheme.typography.titleMedium)
             Button(
                 onClick = {
@@ -117,8 +153,10 @@ fun SettingsScreen(
             HorizontalDivider()
 
             Text("About", style = MaterialTheme.typography.titleMedium)
-            Text("SnagLite — Version 1.0", style = MaterialTheme.typography.bodyMedium)
-            Text("Developed by Paolo Patron.", style = MaterialTheme.typography.bodyMedium)
+            // Read from BuildConfig, not a literal — the previous hardcoded string had
+            // already drifted from versionName in build.gradle.kts.
+            Text("SnagLite — Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
+            Text("Developed by Paolo Patron", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
         }
     }
