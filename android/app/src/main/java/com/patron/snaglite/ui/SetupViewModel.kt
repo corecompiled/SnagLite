@@ -33,8 +33,9 @@ class SetupViewModel(private val app: Application) : AndroidViewModel(app) {
 
     /**
      * The ViewModel now outlives the composition, so `LaunchedEffect(Unit)` in
-     * SetupScreen re-fires on every configuration change. Setup must run once
-     * per ViewModel instance, not once per composition.
+     * SetupScreen re-fires on every configuration change. Guards against a
+     * configuration change re-entering a run that is still in progress; see
+     * [start] for why a *finished* run is explicitly not guarded.
      */
     private var started = false
 
@@ -49,6 +50,19 @@ class SetupViewModel(private val app: Application) : AndroidViewModel(app) {
     val state: StateFlow<SetupUiState> = _state.asStateFlow()
 
     fun start(requestNotifPermission: suspend () -> Unit) {
+        // A run that already finished means SetupScreen is being composed a
+        // second time, which only happens when the user picks Settings →
+        // "Re-run initial setup". Reset instead of early-returning: otherwise
+        // the retained ViewModel still reports finished == true, SetupScreen's
+        // LaunchedEffect calls onDone() on its first frame, and setup never
+        // re-runs — leaving isSetupComplete false so the screen reappears on
+        // the next cold launch. The `started` guard only needs to hold while a
+        // run is still in flight, which is the configuration-change case it
+        // was added for.
+        if (started && _state.value.finished) {
+            started = false
+            _state.value = SetupUiState(initial, finished = false)
+        }
         if (started) return
         started = true
         viewModelScope.launch {
