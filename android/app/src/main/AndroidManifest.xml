@@ -43,9 +43,16 @@
             android:exported="false"
             android:theme="@style/Theme.SnagLite" />
 
+        <!--
+          WorkManager runs the queue's foreground service through its own
+          SystemForegroundService, which declares no foregroundServiceType of its
+          own. From API 34 a typed permission requires a typed service, so the type
+          is merged in here; without it startForeground throws
+          MissingForegroundServiceTypeException the first time a download starts.
+        -->
         <service
-            android:name=".service.DownloadService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 </manifest>

@@ -6,7 +6,7 @@ import android.os.PowerManager
 import android.util.Log
 import com.patron.snaglite.R
 import com.patron.snaglite.SnagLiteApplication
-import com.patron.snaglite.service.DownloadService
+import com.patron.snaglite.service.DownloadQueueWorker
 import com.patron.snaglite.yt.YouTubePlaylist
 import com.patron.snaglite.yt.YouTubeUpdater
 import kotlinx.coroutines.CoroutineScope
@@ -425,8 +425,15 @@ class DownloadController(
     fun resumeRestored() {
         if (hasResumedRestored) return
         hasResumedRestored = true
-        scope.launch { pumpQueue() }
+        DownloadQueueWorker.ensureRunning(app)
     }
+
+    /**
+     * Entry point for [DownloadQueueWorker]. The worker holds the foreground service
+     * but does not run downloads itself, so it calls this once on start to promote
+     * whatever is waiting; [startItem]'s `finally` keeps the queue moving after that.
+     */
+    internal suspend fun pumpNow() = pumpQueue()
 
     /**
      * Acquire the wake lock + Wi-Fi lock + foreground service when at least one
@@ -467,10 +474,14 @@ class DownloadController(
             } else {
                 app.getString(R.string.notif_text_progress, shown.title.take(80), pct)
             }
-            DownloadService.start(app, title, text, pct, indeterminate)
+            // The worker owns the notification now; it reads the same items flow, so
+            // there is nothing to push. This call only guarantees one is running.
+            DownloadQueueWorker.ensureRunning(app)
         } else {
             releaseLocks()
-            DownloadService.stop(app)
+            // Not cancelled: the worker exits on its own once the queue drains, and
+            // cancelling here would tear down the foreground service while its final
+            // notification update is still in flight.
         }
     }
 
