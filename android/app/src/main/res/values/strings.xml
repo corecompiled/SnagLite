@@ -1,4 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SnagLite</string>
+
+    <!-- Home screen -->
+    <string name="main_url_label">Video URL</string>
+    <string name="main_format_video">Video</string>
+    <string name="main_format_audio">Audio</string>
+    <string name="main_download">Download</string>
+    <string name="main_downloads_header">Downloads</string>
+    <string name="main_clear_finished">Clear finished</string>
+
+    <string name="main_empty_title">No downloads yet</string>
+    <string name="main_empty_body">Paste a link, choose Video or Audio, then tap Download. Videos are saved to Movies/SnagLite, audio to Music/SnagLite.</string>
+
+    <!--
+      %1$d is DownloadController.MAX_ACTIVE. Shown only while something is
+      actually waiting, so the limit is explained at the moment it bites.
+    -->
+    <plurals name="main_queue_note">
+        <item quantity="one">%1$d at a time — the rest are waiting.</item>
+        <item quantity="other">%1$d at a time — the rest are waiting.</item>
+    </plurals>
+
+    <!-- Content descriptions -->
+    <string name="cd_settings">Settings</string>
+    <string name="cd_paste">Paste</string>
 </resources>
