@@ -14,8 +14,11 @@ android {
         applicationId = "com.patron.snaglite"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        // versionCode must strictly increase for any install-over-the-top or Play
+        // upload; versionName is the human-facing string SettingsScreen reads via
+        // BuildConfig.VERSION_NAME. Keep them moving together.
+        versionCode = 2
+        versionName = "1.1.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -67,7 +70,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures { compose = true }
+    // buildConfig is off by default from AGP 8; SettingsScreen reads VERSION_NAME
+    // from it so the About line cannot drift from versionName again.
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     splits {
         abi {
