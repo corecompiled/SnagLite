@@ -8,6 +8,8 @@
 SnagLite/
 ├── SnagLite.slnx
 ├── README.md / CLAUDE.md / PRIVATE_NOTES.local.md (gitignored)
+├── Directory.Build.props / Directory.Packages.props   # .NET repo-wide props + central package versions
+├── .github/dependabot.yml                             # weekly nuget / gradle / actions updates
 ├── publish/                                 # dotnet publish output → snaglite.exe
 ├── src/SnagLite/                            # .NET 10 console (AssemblyName=snaglite, RootNamespace=SnagLite)
 │   ├── SnagLite.csproj                      # net10.0, single-file self-contained
@@ -18,28 +20,55 @@ SnagLite/
 │   ├── Config/AppConfig.cs                  # JSON config at %APPDATA%\SnagLite\config.json
 │   └── hosts.local.txt                      # gitignored, embedded as resource if present
 └── android/                                 # Kotlin/Compose APK, applicationId com.patron.snaglite
-    └── app/src/main/
-        ├── AndroidManifest.xml              # FOREGROUND_SERVICE_DATA_SYNC, WAKE_LOCK, ACCESS_WIFI_STATE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-        ├── assets/hosts.local.txt           # gitignored, loaded by IframeUnwrapper.init
-        └── java/com/patron/snaglite/
-            ├── SnagLiteApplication.kt       # channel "snaglite_downloads", media migration on first run
-            ├── MainActivity.kt
-            ├── download/                    # DownloadController, Downloader (yt-dlp path), DirectDownloader (resolver path),
-            │                                # MediaSink (publishes to Movies/SnagLite or Music/SnagLite via MediaStore),
-            │                                # MetadataFetcher, SnagLitePrefs, DownloadItem, resolvers/
-            ├── ui/                          # Compose: MainScreen, SettingsScreen, SetupScreen, DownloadItemCard, BatteryOptDialog, Theme (SnagLiteTheme), UpdateGate
-            ├── yt/                          # YouTubeHost, YouTubeArgsInjector, YouTubeBootstrapper (WebView visitor_data harvest),
-            │                                # YouTubePlaylist, YouTubePrefs ("snaglite_yt"), YouTubeUpdater, EngineUpdateChecker, CookieStore
-            ├── service/DownloadService.kt   # foreground service, dataSync type
-            └── webview/YouTubeSignInActivity.kt
+    ├── app/src/main/
+    │   ├── AndroidManifest.xml              # FOREGROUND_SERVICE_DATA_SYNC, WAKE_LOCK, ACCESS_WIFI_STATE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+    │   ├── assets/hosts.local.txt           # gitignored, loaded by IframeUnwrapper.init
+    │   ├── res/xml/                         # backup_rules.xml + data_extraction_rules.xml (cookie-jar exclusions)
+    │   └── java/com/patron/snaglite/
+    │       ├── SnagLiteApplication.kt       # channel "snaglite_downloads", media migration on first run
+    │       ├── MainActivity.kt
+    │       ├── download/                    # DownloadController, Downloader (yt-dlp path), DirectDownloader (resolver path),
+    │       │                                # MediaSink (publishes to Movies/SnagLite or Music/SnagLite via MediaStore),
+    │       │                                # MetadataFetcher, SnagLitePrefs, DownloadItem, resolvers/
+    │       ├── ui/                          # Compose: SnagLiteScaffold (the one Scaffold), MainScreen, SettingsScreen,
+    │       │                                # SetupScreen, DownloadItemCard, BatteryOptDialog, Theme (SnagLiteTheme), UpdateGate
+    │       ├── yt/                          # YouTubeHost, YouTubeArgsInjector, YouTubeBootstrapper (WebView visitor_data harvest),
+    │       │                                # YouTubePlaylist, YouTubePrefs ("snaglite_yt"), YouTubeUpdater, EngineUpdateChecker, CookieStore
+    │       ├── service/DownloadService.kt   # foreground service, dataSync type
+    │       └── webview/YouTubeSignInActivity.kt
+    └── gradle/libs.versions.toml            # version catalog — every Android dependency + plugin version
 ```
 
 ## Build / run
 
 ```bash
-dotnet publish src/SnagLite/SnagLite.csproj -c Release -r win-x64 --self-contained -o publish   # → publish/snaglite.exe (~37 MB)
+dotnet publish src/SnagLite/SnagLite.csproj -c Release -r win-x64 --self-contained -o publish   # → publish/snaglite.exe (~42.6 MB)
 cd android && .\gradlew.bat :app:assembleRelease                                                  # → app-{arm64-v8a,armeabi-v7a,x86_64,universal}-release.apk
 ```
+
+## Toolchain versions
+
+All Android versions live in `android/gradle/libs.versions.toml` — never hardcode one in a `build.gradle.kts`.
+
+| | Version | Notes |
+|---|---|---|
+| AGP | 8.13.2 | Max supported API is 36.1 |
+| Gradle | 8.13 | AGP 8.13.2's minimum and default |
+| Kotlin | 2.3.20 | K2. Compose compiler is `org.jetbrains.kotlin.plugin.compose`, versioned *as* Kotlin — there is no `composeOptions` block |
+| compileSdk / targetSdk | 36 | Play requires 36 for new apps and updates as of 2026-08-31 |
+| minSdk | 26 | Do not raise |
+| JDK | 17 | |
+| Compose BOM | 2026.06.01 | Material3 1.4.0 |
+| .NET | net10.0 | Current LTS |
+
+**AGP 9.x is deliberately not adopted.** It removes the `org.jetbrains.kotlin.android` plugin in favour of built-in Kotlin *and* flips `android.r8.strictFullModeForKeepRules` to `true`, under which `-keep class A` stops implying A's default constructor. Given this project's history of an R8 launch crash from exactly that (commons-compress `AsiExtraField`), those two migrations must not land together. See the R8 notes below.
+
+**Three libraries are deliberately pinned below their newest release** — do not bump them without solving the blocker first:
+- `androidx.core:core-ktx` **1.17.0** — 1.19.0 requires compileSdk 37 + AGP 9.1; 1.18.0 requires compileSdk 36.1.
+- `androidx.lifecycle` **2.10.0** — 2.11.0 requires compileSdk 37 + AGP 9.2.
+- `io.coil-kt.coil3` **3.4.0** — 3.5.0 is built with Kotlin 2.4.0, whose stdlib metadata a 2.3.20 compiler cannot read; the symptom is a flood of bogus "unresolved reference" errors on ordinary stdlib calls in files that never touch Coil.
+
+**Kotlin 2.3.20 makes `kotlinOptions { jvmTarget = "17" }` a hard error, not a deprecation warning.** The replacement is a top-level block in `android/app/build.gradle.kts`: `kotlin { compilerOptions { jvmTarget = JvmTarget.fromTarget("17") } }`.
 
 ## CI
 
@@ -60,6 +89,8 @@ Release signing is wired into `release.yml`: four GitHub Secrets — `SNAGLITE_K
 | CLI | `%LOCALAPPDATA%\SnagLite\bin\` (auto-installed yt-dlp / ffmpeg / aria2c) | `%APPDATA%\SnagLite\config.json` | `%USERPROFILE%\Videos\SnagLite\` |
 | Android | extracted from APK assets to internal storage | `SharedPreferences("snaglite_yt")` + `SharedPreferences("snaglite_app")` | `Movies/SnagLite` (video) / `Music/SnagLite` (audio) |
 
+`filesDir/yt-cookies.txt`, the WebView cookie database under `app_webview/`, and the `snaglite_yt` preference file are excluded from Android Auto Backup and from device-to-device transfer via `res/xml/backup_rules.xml` (API ≤ 30) and `res/xml/data_extraction_rules.xml` (API 31+). Both files must be kept in sync — a cookie surface added to one and not the other leaks on half the supported API range.
+
 First-run migration is automatic on both platforms:
 - CLI: `Paths.MigrateLegacyDataDirs()` (called from `Program.cs`) moves `Snagger` → `Snag` → `SnagLite` for `%LOCALAPPDATA%`, `%APPDATA%`, and `%USERPROFILE%\Videos`. Idempotent — skips when target exists.
 - Android: `MediaSink.migrateLegacyPublishedFiles()` (called from `SnagLiteApplication.onCreate`, gated by `SnagLitePrefs.K_MEDIA_MIGRATED`) re-writes MediaStore `RELATIVE_PATH` for `Movies/Snag/` → `Movies/SnagLite/` and `Music/Snag/` → `Music/SnagLite/`. Best-effort; rows owned by the old `com.patron.snag` install may not update (harmless).
@@ -72,6 +103,8 @@ First-run migration is automatic on both platforms:
 - **Generic-extractor retry.** On `Unsupported URL`, `DownloadCommand` re-runs once with `--force-generic-extractor` + inferred `Referer`. A short pre-known list of wrapper-host iframes is unwrapped upfront via `IframeUnwrapper`; the list is loaded at process start from gitignored `hosts.local.txt` (CLI: embedded resource; Android: APK asset). Missing file → empty list → feature silently disabled, normal extractor + generic fallback still handle everything.
 - **Android background reliability.** `DownloadController.ensureLocks()` acquires a `PARTIAL_WAKE_LOCK` (2-hour cap) + `WIFI_MODE_FULL_HIGH_PERF` `WifiLock` while any item is active; both released by `releaseLocks()` on drain. `BatteryOptDialog` on first launch (gated by `SnagLitePrefs.battOptDontAsk`) fires `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` to defeat doze on Android 6+. Foreground service type is `dataSync`.
 - **Thumbnail prefetch.** `MetadataFetcher` runs `yt-dlp --dump-json --skip-download --no-playlist --no-warnings`; parses `title`, best `thumbnail`, `duration`, `uploader`/`channel`, `filesize`/`filesize_approx`. `DownloadController.enqueue` fires this on `applicationScope` as fire-and-forget — download isn't blocked. `DownloadItemCard` renders via Coil 3 `AsyncImage` (`coil-network-okhttp:3.0.4`), falls back to a `PlayCircle` icon. Translucent scrim + `CircularProgressIndicator` overlays while running.
+- **One `Scaffold`, in `SnagLiteScaffold.kt`.** Every screen renders through it. It owns the `TopAppBar`, the `SnackbarHost`, and `contentWindowInsets = WindowInsets.safeDrawing`, and hands its `PaddingValues` to the screen — which must apply them. Do not add a second `Scaffold` and do not apply inset padding anywhere else; `targetSdk 36` makes edge-to-edge mandatory, and having one inset owner is what keeps that a configuration detail rather than a per-screen audit. User feedback goes through the snackbar host, never `Toast`.
+- **DayNight window theme + splash screen.** `MainActivity` calls `installSplashScreen()` before `super.onCreate()`, then `enableEdgeToEdge()`. `values/themes.xml` (API 26–28) and `values-night/` cover pre-29 dark mode; `values-v29/themes.xml` parents on `android:Theme.DeviceDefault.DayNight` so the platform theme itself follows system dark mode. Note: the framework has no `android:Theme.DeviceDefault.DayNight.NoActionBar` at any API level — `values-v29/themes.xml` reproduces `NoActionBar` manually with `windowActionBar=false` + `windowNoTitle=true`. The window background must track dark mode via `@color/snaglite_window_background` or a cold launch flashes the wrong color before Compose paints.
 
 ## Android release signing
 
@@ -97,12 +130,22 @@ No automated tests. Manual matrix (concrete URLs in `PRIVATE_NOTES.local.md`):
 5. `--audio-only`, `-o`, `snaglite update`.
 6. Build with `hosts.local.txt` absent — wrapper-host URL falls through to yt-dlp's generic extractor cleanly (no crash, no unwrap).
 7. Android: install on top of a pre-existing `com.patron.snag` install — confirm `Movies/Snag/*` migrates to `Movies/SnagLite/` on first launch (best-effort).
+8. Rotate the device mid-download — the list, its progress, and in-flight setup steps must survive.
+9. Back gesture from Settings returns to the list; back again exits.
+10. Cold launch in dark mode shows no white flash; cold launch in light mode shows no dark flash.
+11. Edge-to-edge: app bar background reaches the top edge but its title clears the status bar; the Download button clears the navigation bar. Check in both gesture and 3-button navigation.
+
+Items 8–11 were added by the 2026 toolchain modernization branch and are **unverified on hardware** — the test device was removed partway through that work. The edge-to-edge, `SnagLiteScaffold`, and splash-screen changes were verified by build and static APK inspection only; run the full matrix on a real device before treating them as confirmed.
 
 ## Deliberately out of scope
 
 - Cookies / login flows (no creds, per requirement) — except the YouTube WebView sign-in fallback on Android.
 - Playlists on CLI (Android supports YouTube playlists via `YouTubePlaylist.enumerate`).
 - Batch files, subtitles, cross-platform CLI.
+- AGP 9.x / built-in Kotlin (see Toolchain versions for why).
+- WorkManager migration for the download queue. The queue lives only in an in-memory `MutableStateFlow` in `DownloadController`, so it does not survive process death, and `pumpQueue` can start a foreground service while the app is backgrounded — which Android 12+ rejects with `ForegroundServiceStartNotAllowedException`. Both are real, both are known, and both need their own plan.
+- Adaptive / large-screen layouts. The list is single-pane at every window size.
+- Automated tests of any kind.
 
 ---
 
