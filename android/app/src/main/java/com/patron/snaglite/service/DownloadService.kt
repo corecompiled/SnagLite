@@ -8,7 +8,10 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.patron.snaglite.MainActivity
 import com.patron.snaglite.R
 import com.patron.snaglite.SnagLiteApplication
@@ -34,6 +37,42 @@ class DownloadService : Service() {
         return START_STICKY
     }
 
+    /**
+     * Android 15 caps a `dataSync` foreground service at roughly 6 hours of
+     * cumulative runtime per 24-hour window for apps targeting API 35+ (this
+     * app targets 36), then calls this. Not stopping promptly costs us a
+     * [android.app.ForegroundServiceDidNotStopInTimeException] crash; once the
+     * quota is spent, further starts throw
+     * `ForegroundServiceStartNotAllowedException` until it refills.
+     *
+     * This is a crash guard only. Downloads still in flight are owned by
+     * `DownloadController`'s in-memory queue, which does not survive the
+     * service going away — see the WorkManager entry in CLAUDE.md's
+     * "Deliberately out of scope".
+     */
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Log.w(
+            TAG,
+            "dataSync foreground-service timeout (startId=$startId, fgsType=$fgsType): " +
+                "Android 15 6h/24h quota exhausted, stopping service",
+        )
+        stopNow()
+    }
+
+    /** API 34's single-argument form. Only ever fires for `shortService`, but
+     * overriding it costs nothing and keeps the two paths identical. */
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    override fun onTimeout(startId: Int) {
+        Log.w(TAG, "foreground-service timeout (startId=$startId), stopping service")
+        stopNow()
+    }
+
+    private fun stopNow() {
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     private fun buildNotification(title: String, text: String): Notification {
         val tap = PendingIntent.getActivity(
             this, 0,
@@ -51,6 +90,7 @@ class DownloadService : Service() {
     }
 
     companion object {
+        private const val TAG = "DownloadService"
         const val EXTRA_TITLE = "title"
         const val EXTRA_TEXT = "text"
         private const val NOTIF_ID = 1001
