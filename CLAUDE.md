@@ -135,7 +135,13 @@ No automated tests. Manual matrix (concrete URLs in `PRIVATE_NOTES.local.md`):
 10. Cold launch in dark mode shows no white flash; cold launch in light mode shows no dark flash.
 11. Edge-to-edge: app bar background reaches the top edge but its title clears the status bar; the Download button clears the navigation bar. Check in both gesture and 3-button navigation.
 
-Items 8–11 were added by the 2026 toolchain modernization branch and are **unverified on hardware** — the test device was removed partway through that work. The edge-to-edge, `SnagLiteScaffold`, and splash-screen changes were verified by build and static APK inspection only; run the full matrix on a real device before treating them as confirmed.
+Items 8–11 were added by the 2026 toolchain modernization branch. All four were **run on hardware on 2026-08-03** (TECNO KM7k, Android 15 / API 35, arm64-v8a) against the release APK — R8 and the resource shrinker included — and all four passed, along with the release smoke test, the setup flow, the Snackbar migration, RTL, and an end-to-end download. Three checks remain unverified and are **not** claimed:
+
+- **API 26–28 base theme** (`values/themes.xml`) and the parked API 26–28 night-mode sign-in header. Invisible on API 29+, which resolves `values-v29/themes.xml` instead. Needs an API 26–28 emulator image.
+- **`DownloadService.onTimeout`** (Android 15's 6h/24h `dataSync` quota). No `adb` command spends the quota; it can only be observed on a genuinely long session.
+- **Predictive-back cancel** (start the gesture, hold, slide back, release below the commit threshold). `adb shell input swipe` only produces linear gestures, so this needs a human thumb.
+
+One real finding, minor and not a merge blocker: `YouTubeSignInActivity` never calls `enableEdgeToEdge()` and never sets `isAppearanceLightStatusBars` / `isAppearanceLightNavigationBars`, so in **light mode** the system status-bar icons (and, in three-button navigation, the nav-bar icons) render near-white on the activity's near-white background and are hard to read. Content insets themselves are correct in both navigation modes — nothing is clipped or overlapped. Dark mode is unaffected.
 
 ## Deliberately out of scope
 
