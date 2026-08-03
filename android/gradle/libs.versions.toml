@@ -6,7 +6,7 @@ kotlin = "2.3.20"
 # SDK levels
 compileSdk = "36"
 minSdk = "26"
-targetSdk = "34"
+targetSdk = "36"
 
 # Libraries
 composeBom = "2026.06.01"

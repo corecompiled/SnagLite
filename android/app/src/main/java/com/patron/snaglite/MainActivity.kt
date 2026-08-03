@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,10 @@ class MainActivity : ComponentActivity() {
         // Theme.SnagLite.Splash over to Theme.SnagLite.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Android 15+ with targetSdk 35+ forces this on regardless; calling it
+        // explicitly makes API 26–34 behave the same way instead of drawing
+        // inside opaque system bars.
+        enableEdgeToEdge()
 
         setContent {
             SnagLiteTheme {

@@ -147,6 +147,10 @@ snaglite <url> --no-aria2                # use yt-dlp's native downloader instea
 
 Kotlin + Jetpack Compose APK. Wraps the same `yt-dlp` + `ffmpeg` + `aria2c` engine via the [youtubedl-android](https://github.com/yausername/youtubedl-android) library, with native resolvers bolted on for embed hosts the generic extractor can't crack.
 
+**Android requirements:** Android 8.0 (API 26) or newer. Built against
+Android 16 (API 36), so the app draws edge-to-edge behind the status and
+navigation bars and supports the predictive back gesture on Android 14+.
+
 ### What it does
 
 - Paste any video URL, tap **Download** — saves a merged `.mp4` (or `.m4a` audio-only) to `Movies/SnagLite` (or `Music/SnagLite`) via scoped-storage MediaStore.
@@ -217,7 +221,7 @@ The release build is signed with a release keystore if four env vars are set; ot
 
 Generate a keystore once with `keytool -genkeypair -v -keystore $HOME\snaglite-release.jks -keyalg RSA -keysize 2048 -validity 36500 -alias snaglite`.
 
-Requires JDK 17 + Android SDK (API 34).
+Requires JDK 17 + Android SDK (API 36).
 
 ### Settings
 
