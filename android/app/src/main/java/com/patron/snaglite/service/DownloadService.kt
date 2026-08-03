@@ -28,7 +28,9 @@ class DownloadService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "Downloading"
         val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Working…"
-        val notif = buildNotification(title, text)
+        val percent = intent?.getIntExtra(EXTRA_PERCENT, 0) ?: 0
+        val indeterminate = intent?.getBooleanExtra(EXTRA_INDETERMINATE, true) ?: true
+        val notif = buildNotification(title, text, percent, indeterminate)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -73,7 +75,12 @@ class DownloadService : Service() {
         stopSelf()
     }
 
-    private fun buildNotification(title: String, text: String): Notification {
+    private fun buildNotification(
+        title: String,
+        text: String,
+        percent: Int,
+        indeterminate: Boolean,
+    ): Notification {
         val tap = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
@@ -85,7 +92,13 @@ class DownloadService : Service() {
             .setContentText(text)
             .setContentIntent(tap)
             .setOngoing(true)
+            // Without this every progress tick re-alerts, which on some OEM skins
+            // means a sound or a heads-up per update.
             .setOnlyAlertOnce(true)
+            // Indeterminate until yt-dlp reports a real percentage. The longest
+            // phase on YouTube is challenge-solving, before any percent exists —
+            // a bar parked at 0 there reads as a stall rather than as work.
+            .setProgress(100, percent, indeterminate)
             .build()
     }
 
@@ -93,12 +106,22 @@ class DownloadService : Service() {
         private const val TAG = "DownloadService"
         const val EXTRA_TITLE = "title"
         const val EXTRA_TEXT = "text"
+        const val EXTRA_PERCENT = "percent"
+        const val EXTRA_INDETERMINATE = "indeterminate"
         private const val NOTIF_ID = 1001
 
-        fun start(ctx: Context, title: String, text: String) {
+        fun start(
+            ctx: Context,
+            title: String,
+            text: String,
+            percent: Int = 0,
+            indeterminate: Boolean = true,
+        ) {
             val i = Intent(ctx, DownloadService::class.java).apply {
                 putExtra(EXTRA_TITLE, title)
                 putExtra(EXTRA_TEXT, text)
+                putExtra(EXTRA_PERCENT, percent)
+                putExtra(EXTRA_INDETERMINATE, indeterminate)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i)
             else ctx.startService(i)
