@@ -10,6 +10,7 @@ import com.patron.snaglite.service.DownloadService
 import com.patron.snaglite.yt.YouTubePlaylist
 import com.patron.snaglite.yt.YouTubeUpdater
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,8 +34,21 @@ class DownloadController(
     private val app: SnagLiteApplication,
     private val scope: CoroutineScope,
 ) {
-    private val _items = MutableStateFlow<List<DownloadItem>>(emptyList())
+    // Read synchronously rather than off-thread so the list is already correct the
+    // first time the UI collects it — an async restore would flash an empty screen
+    // and then fill, which reads as "my downloads were lost" for exactly as long as
+    // it takes to notice. The payload is a few KB of JSON.
+    private val _items = MutableStateFlow(QueueStore.load(app))
     val items: StateFlow<List<DownloadItem>> = _items.asStateFlow()
+
+    /**
+     * Restored items are not started here. `pumpQueue` starts a foreground service,
+     * and this constructor can run while the app is in the background — which
+     * Android 12+ answers with `ForegroundServiceStartNotAllowedException`.
+     * [resumeRestored] is called from the UI instead, where a foreground start is
+     * legal.
+     */
+    @Volatile private var hasResumedRestored = _items.value.none { it.status is DownloadStatus.Queued }
 
     private val jobs = ConcurrentHashMap<String, Job>()
     private val mutex = Mutex()
@@ -360,10 +374,47 @@ class DownloadController(
 
     private fun updateItems(transform: (List<DownloadItem>) -> List<DownloadItem>) {
         _items.value = transform(_items.value)
+        persist()
     }
 
     private fun updateItem(id: String, transform: (DownloadItem) -> DownloadItem) {
         _items.value = _items.value.map { if (it.id == id) transform(it) else it }
+        persist()
+    }
+
+    @Volatile private var lastPersistMs = 0L
+
+    /**
+     * Mirror the queue to disk. Throttled like [bumpServiceNotification], because
+     * progress ticks arrive several times a second and the only thing that changes
+     * between most of them is a percentage this store deliberately does not keep.
+     *
+     * The throttle is skipped whenever the set of items or any of their *states*
+     * changed rather than just their progress — those are the transitions worth
+     * losing nothing over.
+     */
+    private fun persist() {
+        val snapshot = _items.value
+        val signature = snapshot.joinToString(",") { "${it.id}:${it.status.javaClass.simpleName}" }
+        val structural = signature != lastPersistSignature
+        val now = System.currentTimeMillis()
+        if (!structural && now - lastPersistMs < 2_000L) return
+        lastPersistMs = now
+        lastPersistSignature = signature
+        scope.launch(Dispatchers.IO) { QueueStore.save(app, snapshot) }
+    }
+
+    @Volatile private var lastPersistSignature: String = ""
+
+    /**
+     * Start anything restored from disk. Safe to call repeatedly; only the first
+     * call does anything. Must be invoked from the foreground — see the note on
+     * [hasResumedRestored].
+     */
+    fun resumeRestored() {
+        if (hasResumedRestored) return
+        hasResumedRestored = true
+        scope.launch { pumpQueue() }
     }
 
     /**

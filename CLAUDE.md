@@ -29,7 +29,8 @@ SnagLite/
     │       ├── MainActivity.kt
     │       ├── download/                    # DownloadController, Downloader (yt-dlp path), DirectDownloader (resolver path),
     │       │                                # MediaSink (publishes to Movies/SnagLite or Music/SnagLite via MediaStore),
-    │       │                                # MetadataFetcher, SnagLitePrefs, DownloadItem, resolvers/
+    │       │                                # MetadataFetcher, SnagLitePrefs, DownloadItem, resolvers/,
+    │       │                                # QueueStore (queue mirrored to filesDir/queue.json)
     │       ├── ui/                          # Compose: SnagLiteScaffold (the one Scaffold), MainScreen, SettingsScreen,
     │       │                                # SetupScreen, DownloadItemCard, BatteryOptDialog, Theme (SnagLiteTheme), UpdateGate
     │       ├── yt/                          # YouTubeHost, YouTubeArgsInjector, YouTubeBootstrapper (WebView visitor_data harvest),
@@ -151,7 +152,11 @@ Reaching that activity for a test is awkward: it is `exported="false"` and `am s
 - Playlists on CLI (Android supports YouTube playlists via `YouTubePlaylist.enumerate`).
 - Batch files, subtitles, cross-platform CLI.
 - AGP 9.x / built-in Kotlin (see Toolchain versions for why).
-- WorkManager migration for the download queue. The queue lives only in an in-memory `MutableStateFlow` in `DownloadController`, so it does not survive process death, and `pumpQueue` can start a foreground service while the app is backgrounded — which Android 12+ rejects with `ForegroundServiceStartNotAllowedException`. Both are real, both are known, and both need their own plan. Related: `DownloadService.onTimeout` now stops the service cleanly when Android 15 exhausts the `dataSync` 6h/24h quota, so that path no longer crashes — but the in-memory queue still does not survive it, and in-flight downloads are lost.
+- WorkManager migration for the download queue. **Partly addressed:** `QueueStore` now mirrors the queue to `filesDir/queue.json` on every state change and `DownloadController` restores it in its constructor, so the list itself survives process death. Restored in-flight items come back as `Queued` — never `Running`, since no process is behind them — and resume through yt-dlp's `--continue` against the work directory, which is why `workDirFor` had to move off `cacheDir` (Android reclaims that, preferentially while backgrounded and against the largest files). Progress percentages are deliberately not persisted.
+
+  What is still missing is *execution* under WorkManager. Restored items do not start on their own: `pumpQueue` starts a foreground service, and doing that from `DownloadController`'s constructor could run while the app is backgrounded, which Android 12+ rejects with `ForegroundServiceStartNotAllowedException`. `MainViewModel.init` calls `DownloadController.resumeRestored()` instead, so the pump happens from the foreground — meaning a killed download resumes when the user next opens the app, not before. Moving execution to a `CoroutineWorker` would close that gap and retire `DownloadService` along with the FGS-start hazard; note WorkManager has no per-tag parallelism cap, so `MAX_ACTIVE = 3` would still need the existing promote-from-`Queued` logic. Plan: `~/.claude/plans/download-queue-durability.md`.
+
+  Related: `DownloadService.onTimeout` stops the service cleanly when Android 15 exhausts the `dataSync` 6h/24h quota. In-flight downloads still stop there, but the queue now survives it.
 - Adaptive / large-screen layouts. The list is single-pane at every window size.
 - Automated tests of any kind.
 
