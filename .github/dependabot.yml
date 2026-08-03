@@ -20,13 +20,17 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
+    # Dependabot assigns a dependency to the FIRST group whose pattern matches,
+    # not to every group it matches. `compose` must therefore come before
+    # `androidx` — the other way round, "androidx.*" swallows every Compose
+    # artifact and the compose group never receives a member.
     groups:
-      androidx:
-        patterns:
-          - "androidx.*"
       compose:
         patterns:
           - "androidx.compose*"
+      androidx:
+        patterns:
+          - "androidx.*"
     ignore:
       # Upgrading the download engine changes download behaviour, not build
       # plumbing. It needs the manual URL matrix in PRIVATE_NOTES.local.md,
