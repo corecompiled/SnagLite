@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      API 29+ override: DayNight parent so the platform theme's own colours
+      follow the system dark-mode setting, not just the window background.
+      Keep the three items in sync with values/themes.xml.
+
+      Deviation from the brief: the brief specifies parent
+      "android:Theme.DeviceDefault.DayNight.NoActionBar", but that style does
+      not exist in the public Android framework at any compileSdk level
+      (confirmed against compileSdk 36's platform styles: only
+      Theme.DeviceDefault.DayNight exists, with no NoActionBar sibling —
+      android:Theme.DeviceDefault.NoActionBar exists but is not DayNight-
+      aware). Using the non-existent style fails aapt2 linking. Instead this
+      parents on the real DayNight-switching style, android:Theme.
+      DeviceDefault.DayNight (values/values-night swap under the hood,
+      confirmed in the platform's themes_device_defaults.xml), and reproduces
+      NoActionBar the same way the framework's own Theme.Material.NoActionBar
+      does it: windowActionBar=false + windowNoTitle=true.
+    -->
+    <style name="Theme.SnagLite" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/snaglite_window_background</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+
+</resources>

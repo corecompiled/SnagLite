@@ -1,4 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.SnagLite" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+      Post-splash theme, API 26-28. See values-v29/themes.xml for the DayNight
+      parent used on API 29+. The window background must track dark mode or a
+      cold launch flashes white before Compose paints its dark scheme; that
+      comes from @color/snaglite_window_background resolving through
+      values-night/colors.xml, which works on every supported API level.
+    -->
+    <style name="Theme.SnagLite" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/snaglite_window_background</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+
+    <!--
+      Launch theme, handed to the androidx SplashScreen compat layer. Applied via
+      AndroidManifest; MainActivity calls installSplashScreen() before
+      super.onCreate(), which swaps the window over to Theme.SnagLite.
+    -->
+    <style name="Theme.SnagLite.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/snaglite_splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.SnagLite</item>
+    </style>
+
 </resources>
