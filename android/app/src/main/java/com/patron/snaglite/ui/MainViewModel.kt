@@ -18,6 +18,14 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
 
     private val sapp = app as SnagLiteApplication
 
+    init {
+        // Anything restored from disk is Queued with no process behind it. Starting
+        // it here rather than in the controller's constructor is deliberate: this
+        // ViewModel is built by the UI, so the app is in the foreground and the
+        // foreground-service start that pumpQueue performs is permitted.
+        sapp.downloads.resumeRestored()
+    }
+
     val items: StateFlow<List<DownloadItem>> = sapp.downloads.items
 
     private val _format = MutableStateFlow(FormatChoice.Video)
