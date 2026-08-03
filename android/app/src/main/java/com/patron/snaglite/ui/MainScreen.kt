@@ -39,9 +39,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.patron.snaglite.R
+import com.patron.snaglite.download.DownloadController
 import com.patron.snaglite.download.DownloadItem
+import com.patron.snaglite.download.DownloadStatus
 import com.patron.snaglite.download.SnagLitePrefs
 import com.patron.snaglite.webview.YouTubeSignInActivity
 import kotlinx.coroutines.launch
@@ -84,6 +89,7 @@ fun MainScreen(
     }
 
     val hasFinished = items.any { it.isTerminal }
+    val hasQueued = items.any { it.status is DownloadStatus.Queued }
     val snackbarHostState = remember { SnackbarHostState() }
 
     SnagLiteScaffold(
@@ -91,7 +97,7 @@ fun MainScreen(
         snackbarHostState = snackbarHostState,
         actions = {
             IconButton(onClick = { showSettings = true }) {
-                Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.cd_settings))
             }
         },
     ) { inner ->
@@ -105,7 +111,7 @@ fun MainScreen(
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
-                label = { Text("Video URL") },
+                label = { Text(stringResource(R.string.main_url_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -123,7 +129,10 @@ fun MainScreen(
                                 ?.let { url = it }
                         }
                     }) {
-                        Icon(Icons.Filled.ContentPaste, contentDescription = "Paste")
+                        Icon(
+                            Icons.Filled.ContentPaste,
+                            contentDescription = stringResource(R.string.cd_paste),
+                        )
                     }
                 },
             )
@@ -135,7 +144,15 @@ fun MainScreen(
                         onClick = { vm.setFormat(choice) },
                         shape = SegmentedButtonDefaults.itemShape(idx, entries.size),
                     ) {
-                        Text(if (choice == FormatChoice.Video) "Video" else "Audio")
+                        Text(
+                            stringResource(
+                                if (choice == FormatChoice.Video) {
+                                    R.string.main_format_video
+                                } else {
+                                    R.string.main_format_audio
+                                },
+                            ),
+                        )
                     }
                 }
             }
@@ -146,29 +163,48 @@ fun MainScreen(
                 },
                 enabled = url.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Download") }
+            ) { Text(stringResource(R.string.main_download)) }
 
             if (items.isEmpty()) {
-                Text(
-                    "Paste a link, tap Download. Up to 3 downloads run at once; swipe to remove.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                // Own Column so the heading sits tight against its body rather
+                // than inheriting the parent's 12.dp control spacing.
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        stringResource(R.string.main_empty_title),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        stringResource(R.string.main_empty_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Downloads",
+                        stringResource(R.string.main_downloads_header),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f),
                     )
                     if (hasFinished) {
                         TextButton(onClick = { vm.clearFinished() }) {
-                            Text("Clear finished")
+                            Text(stringResource(R.string.main_clear_finished))
                         }
                     }
+                }
+                if (hasQueued) {
+                    Text(
+                        pluralStringResource(
+                            R.plurals.main_queue_note,
+                            DownloadController.MAX_ACTIVE,
+                            DownloadController.MAX_ACTIVE,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
