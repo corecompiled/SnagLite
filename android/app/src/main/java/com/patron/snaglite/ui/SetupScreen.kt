@@ -36,20 +36,22 @@ fun SetupScreen(
         if (state.finished) onDone()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        Text("Welcome to SnagLite", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            "Initial setup runs once and takes about 10 to 20 seconds.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            state.steps.forEach { step -> StepRow(step) }
+    SnagLiteScaffold(title = "Welcome to SnagLite") { inner ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(inner)
+                .padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Text(
+                "Initial setup runs once and takes about 10 to 20 seconds.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                state.steps.forEach { step -> StepRow(step) }
+            }
         }
     }
 }
