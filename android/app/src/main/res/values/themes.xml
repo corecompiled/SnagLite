@@ -11,12 +11,15 @@
       The parent is the *Light* platform theme because a fixed parent has to
       agree with the windowBackground it is paired with in this same resource
       folder, and values/colors.xml is the day-mode one (#FFFBFE). There is no
-      DayNight platform parent before API 29, so night-mode correctness comes
-      from the -night colour qualifier rather than from the parent. Compose
-      screens take their colours from MaterialTheme and are unaffected either
-      way, but YouTubeSignInActivity is a plain View hierarchy whose TextView
-      and Button resolve ?android:textColorPrimary from this theme — a dark
-      parent here renders them near-white on a near-white window.
+      DayNight platform parent before API 29, so night mode gets its own fixed
+      parent in values-night/themes.xml — the colour qualifier alone is not
+      enough, because it moves windowBackground and never
+      ?android:textColorPrimary. Compose screens take their colours from
+      MaterialTheme and are unaffected either way, but YouTubeSignInActivity is
+      a plain View hierarchy whose TextView and Button resolve
+      ?android:textColorPrimary from this theme — a dark parent here renders
+      them near-white on a near-white window, and a light parent under a night
+      window background renders them near-black on near-black.
     -->
     <style name="Theme.SnagLite" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/snaglite_window_background</item>

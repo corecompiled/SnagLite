@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Night override for API 26-28 only — but Android's qualifier precedence
+      puts night mode *above* platform version, so this file would also beat
+      values-v29/themes.xml on API 29+ in night mode. That is why
+      values-night-v29/themes.xml exists: it re-states the v29 DayNight style
+      at a qualifier specific enough to win back API 29+. Do not delete one of
+      these two files without deleting the other.
+
+      Before this file existed, the Light parent in values/themes.xml applied in
+      night mode too on API 26-28, rendering ?android:textColorPrimary near-black
+      against the #1C1B1F night window background. Only YouTubeSignInActivity is
+      affected — it is the app's one View hierarchy; every Compose screen takes
+      its colours from MaterialTheme.
+    -->
+    <style name="Theme.SnagLite" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/snaglite_window_background</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+
+</resources>
