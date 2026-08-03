@@ -333,7 +333,11 @@ class DownloadController(
             is DownloadResult.Failure -> {
                 if (result.needsYouTubeSignIn) pendingSignInId = id
                 val needsEngineUpdate = result.needs403Recovery && !result.needsYouTubeSignIn
-                val classified = DownloadErrors.classify(result.message)
+                // A Failure that carries its own detail was written for a person
+                // already; only raw tool output goes through the classifier.
+                val classified = result.detail
+                    ?.let { DownloadErrors.Classified(result.message, it) }
+                    ?: DownloadErrors.classify(result.message)
                 val displayMessage = when {
                     // These two already have a button attached, so the line only has
                     // to say what happened — the affordance says what to do.
@@ -480,13 +484,21 @@ class DownloadController(
 
     @Synchronized
     private fun ensureLocks() {
-        if (wakeLock?.isHeld != true) {
-            val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
-            val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "snaglite:download")
-            wl.setReferenceCounted(false)
-            wl.acquire(2L * 60L * 60L * 1000L)
-            wakeLock = wl
+        val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val wl = wakeLock ?: pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "snaglite:download").also {
+            it.setReferenceCounted(false)
+            wakeLock = it
         }
+        // Re-acquire unconditionally rather than only when !isHeld. The timeout is a
+        // leak guard, and acquiring again simply restarts it, so an active download
+        // keeps pushing the deadline out instead of racing it.
+        //
+        // The old guard mostly self-healed, because this runs on every state
+        // transition and a live download ticks constantly. What it could not recover
+        // from was a download that stalled with no output: nothing called back in, so
+        // an expired lock stayed expired for as long as the stall lasted — precisely
+        // when the CPU needs to stay up for the transfer to resume.
+        wl.acquire(WAKE_LOCK_TIMEOUT_MS)
         if (wifiLock?.isHeld != true) {
             val wm = app.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
             val fl = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "snaglite:wifi")
@@ -507,5 +519,12 @@ class DownloadController(
     companion object {
         private const val TAG = "DownloadController"
         const val MAX_ACTIVE = 3
+
+        /**
+         * Leak guard, not a budget. Refreshed on every state transition, so a live
+         * download never reaches it; it only matters if the app dies without running
+         * [releaseLocks], where it caps how long a stray lock can hold the CPU up.
+         */
+        private const val WAKE_LOCK_TIMEOUT_MS = 2L * 60L * 60L * 1000L
     }
 }
