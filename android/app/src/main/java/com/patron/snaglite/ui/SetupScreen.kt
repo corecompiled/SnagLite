@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun SetupScreen(
@@ -31,9 +32,17 @@ fun SetupScreen(
 ) {
     val state by vm.state.collectAsState()
 
-    LaunchedEffect(Unit) { vm.start(requestNotifPermission) }
-    LaunchedEffect(state.finished) {
-        if (state.finished) onDone()
+    // Wait on the flow rather than on `state.finished`. When the user picks
+    // Settings → "Re-run initial setup" the retained ViewModel still holds a
+    // finished state, and collectAsState only clears it a dispatch later — a
+    // second LaunchedEffect keyed on `state.finished` would read the stale
+    // `true` on the very first frame and call onDone() before the re-run had a
+    // chance to show. `first { it.finished }` reads the StateFlow directly,
+    // after start() has already reset it.
+    LaunchedEffect(Unit) {
+        vm.start(requestNotifPermission)
+        vm.state.first { it.finished }
+        onDone()
     }
 
     SnagLiteScaffold(title = "Welcome to SnagLite") { inner ->
