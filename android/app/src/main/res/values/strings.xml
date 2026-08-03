@@ -3,7 +3,12 @@
     <string name="app_name">SnagLite</string>
 
     <!-- Home screen -->
-    <string name="main_url_label">Video URL</string>
+    <!--
+      Deliberately format-neutral. The Video/Audio toggle picks the output format,
+      not the input: the same page link serves both, so a label that followed the
+      toggle would imply an "Audio URL" the user has to find and does not have.
+    -->
+    <string name="main_url_label">URL</string>
     <string name="main_format_video">Video</string>
     <string name="main_format_audio">Audio</string>
     <string name="main_download">Download</string>
