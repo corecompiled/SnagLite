@@ -88,6 +88,10 @@ private fun SwipeBackground() {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            // Clip to the card's own shape. Without this the reveal is a plain
+            // rectangle sitting behind a rounded card, so its error colour shows
+            // as four red corners on every row even when nothing is being swiped.
+            .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.errorContainer)
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.CenterEnd,
