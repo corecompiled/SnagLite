@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.patron.snaglite.R
 import com.patron.snaglite.download.DownloadController
@@ -167,16 +168,25 @@ fun MainScreen(
 
             if (items.isEmpty()) {
                 // Own Column so the heading sits tight against its body rather
-                // than inheriting the parent's 12.dp control spacing.
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // than inheriting the parent's 12.dp control spacing, and so the
+                // pair centres as one block instead of two separately-centred lines.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     Text(
                         stringResource(R.string.main_empty_title),
                         style = MaterialTheme.typography.titleSmall,
+                        textAlign = TextAlign.Center,
                     )
                     Text(
                         stringResource(R.string.main_empty_body),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
                     )
                 }
             } else {

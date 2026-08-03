@@ -11,7 +11,7 @@
     <string name="main_clear_finished">Clear finished</string>
 
     <string name="main_empty_title">No downloads yet</string>
-    <string name="main_empty_body">Paste a link, choose Video or Audio, then tap Download. Videos are saved to Movies/SnagLite, audio to Music/SnagLite.</string>
+    <string name="main_empty_body">Paste a link and tap Download.</string>
 
     <!--
       %1$d is DownloadController.MAX_ACTIVE. Shown only while something is
@@ -21,6 +21,24 @@
         <item quantity="one">%1$d at a time — the rest are waiting.</item>
         <item quantity="other">%1$d at a time — the rest are waiting.</item>
     </plurals>
+
+    <!-- Foreground-service notification -->
+    <!--
+      %1$d is the number of active downloads. Plural even though English does not
+      distinguish these two forms in the "one" case, because most locales do.
+    -->
+    <plurals name="notif_title_active">
+        <item quantity="one">SnagLite — downloading</item>
+        <item quantity="other">SnagLite — %1$d downloading</item>
+    </plurals>
+    <!-- %1$d active, %2$d waiting. Used only while something is actually queued. -->
+    <plurals name="notif_title_active_queued">
+        <item quantity="one">SnagLite — %1$d downloading, %2$d queued</item>
+        <item quantity="other">SnagLite — %1$d downloading, %2$d queued</item>
+    </plurals>
+    <string name="notif_text_preparing">Preparing…</string>
+    <!-- %1$s is the item title, %2$d its percentage. -->
+    <string name="notif_text_progress">%1$s  %2$d%%</string>
 
     <!-- Content descriptions -->
     <string name="cd_settings">Settings</string>
