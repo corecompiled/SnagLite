@@ -113,20 +113,31 @@ object Downloader {
         }
         // YouTube auto-recovery: a 403 or sign-in/bot error from the primary client chain
         // is almost always an extractor-staleness symptom. Try once more after refreshing
-        // yt-dlp + visitor_data, with the fallback client chain and yt-dlp's native HTTP
-        // downloader (aria2c can amplify URL drift). Sign-in state is orthogonal — we
-        // retry even when signed in.
+        // yt-dlp + visitor_data, with the fallback client chain. Sign-in state is
+        // orthogonal — we retry even when signed in.
+        //
+        // The retry deliberately keeps aria2c. An earlier version passed skipAria2c=true
+        // here on the theory that aria2c amplifies URL drift, but that swap is what made a
+        // near-complete download start over: aria2c's partial state is the target file plus
+        // a sibling .aria2 control file, while yt-dlp's native downloader resumes from a
+        // .part file. Switching downloaders mid-item leaves --continue nothing it
+        // recognises, so every byte already fetched is thrown away. A 403 is most likely
+        // late in a long transfer, because YouTube's CDN URLs are signed and time-limited —
+        // which is exactly when discarding progress hurts most.
         if (first is DownloadResult.Failure &&
             (first.needs403Recovery || first.needsYouTubeSignIn) &&
             YouTubeHost.isYouTube(url)
         ) {
             Log.i(TAG, "YouTube blocked first attempt — refreshing engine + visitor_data then retrying")
-            onProgress(0f, "YouTube blocked download — refreshing…")
+            // Deliberately not onProgress(0f, …): the retry resumes from the bytes
+            // already on disk, so zeroing the bar would report a restart that is not
+            // happening. Keep whatever percentage the item already reached.
+            onProgress(-1f, "YouTube blocked download — refreshing…")
             runCatching { YouTubeUpdater.updateNow(context) }
                 .onFailure { Log.w(TAG, "engine refresh failed: ${it.message}") }
             runCatching { YouTubeBootstrapper.harvest(context) }
                 .onFailure { Log.w(TAG, "visitor_data refresh failed: ${it.message}") }
-            val retry = runOnce(context, url, workDir, processId, audioOnly, forceGeneric = false, useFallbackClients = true, skipAria2c = true, onProgress)
+            val retry = runOnce(context, url, workDir, processId, audioOnly, forceGeneric = false, useFallbackClients = true, skipAria2c = false, onProgress)
             return finalize(retry, workDir, audioOnly)
         }
         return finalize(first, workDir, audioOnly)

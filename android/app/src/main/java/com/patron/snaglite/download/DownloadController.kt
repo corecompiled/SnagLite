@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.util.Log
+import com.patron.snaglite.R
 import com.patron.snaglite.SnagLiteApplication
 import com.patron.snaglite.service.DownloadService
 import com.patron.snaglite.yt.YouTubePlaylist
@@ -212,8 +213,16 @@ class DownloadController(
             processId = id,
             onProgress = { pct, line ->
                 updateItem(id) {
-                    if (it.status is DownloadStatus.Running) it.copy(status = DownloadStatus.Running(pct, line))
-                    else it
+                    val cur = it.status
+                    // A negative percent means "status line only, percentage unknown" —
+                    // used by the 403 retry, which resumes from bytes already on disk.
+                    // Overwriting the real percentage there would report a restart that
+                    // is not happening.
+                    if (cur is DownloadStatus.Running) {
+                        it.copy(status = DownloadStatus.Running(if (pct < 0f) cur.percent else pct, line))
+                    } else {
+                        it
+                    }
                 }
                 bumpServiceNotification()
             },
@@ -269,6 +278,7 @@ class DownloadController(
                 Log.w(TAG, "playlist $id item $n failed: ${result.message.take(120)}")
             }
         }
+        if (saved > 0) cleanWorkDir(id)
         updateItem(id) {
             if (saved == 0) {
                 it.copy(status = DownloadStatus.Error("No videos from this playlist could be downloaded."))
@@ -289,6 +299,7 @@ class DownloadController(
             is DownloadResult.Success -> {
                 val published = MediaSink.publishToMovies(app, result.file, result.audioOnly)
                 if (published != null) {
+                    cleanWorkDir(id)
                     updateItem(id) {
                         it.copy(
                             title = published.displayName,
@@ -323,7 +334,27 @@ class DownloadController(
         }
     }
 
-    private fun workDirFor(id: String): File = File(File(app.cacheDir, "snaglite-dl"), id)
+    /**
+     * Deliberately [android.content.Context.getFilesDir] and not `cacheDir`. Downloads
+     * resume through yt-dlp's `--continue` against partial files kept here, and Android
+     * is free to reclaim `cacheDir` whenever storage runs low — which it is most likely
+     * to do while the app is backgrounded, against the largest files, i.e. exactly the
+     * near-complete download the user just switched away from.
+     *
+     * The trade is that nothing reclaims this directory for us, so every terminal path
+     * has to sweep it: [remove], [clearFinished], and [cleanWorkDir] after a successful
+     * publish.
+     */
+    private fun workDirFor(id: String): File = File(File(app.filesDir, "snaglite-dl"), id)
+
+    /**
+     * Drop an item's working directory once its bytes have been published to MediaStore.
+     * Under `cacheDir` the OS eventually did this for us; under `filesDir` it does not,
+     * and a kept-but-finished item would otherwise pin a full copy of every download.
+     */
+    private fun cleanWorkDir(id: String) {
+        runCatching { workDirFor(id).deleteRecursively() }
+    }
 
     private fun currentItem(id: String): DownloadItem? = _items.value.firstOrNull { it.id == id }
 
@@ -343,15 +374,38 @@ class DownloadController(
      */
     private fun refreshServiceLifecycle() {
         val items = _items.value
-        val active = items.count { it.isActive }
+        val activeItems = items.filter { it.isActive }
+        val active = activeItems.size
         if (active > 0) {
             ensureLocks()
-            val running = items.firstOrNull { it.status is DownloadStatus.Running } ?: items.first { it.isActive }
-            val pct = (running.status as? DownloadStatus.Running)?.percent
-            val title = if (active == 1) "SnagLite — downloading" else "SnagLite — $active downloads"
-            val text = running.title.take(80) +
-                (pct?.let { "  ${"%.0f".format(it)}%" } ?: "")
-            DownloadService.start(app, title, text)
+            val queued = items.count { it.status is DownloadStatus.Queued }
+
+            // Mean across every active item, not just the first one — with
+            // MAX_ACTIVE = 3 the old single-item read left two downloads
+            // invisible from the shade. Items still Preparing contribute 0,
+            // which is honest: they have started but produced no bytes.
+            val percents = activeItems.map { (it.status as? DownloadStatus.Running)?.percent ?: 0f }
+            val mean = percents.average().toFloat()
+            // Same convention as DownloadItemCard: a percent of exactly 0 means
+            // "no real progress yet", so the bar goes indeterminate rather than
+            // sitting at zero through the challenge-solving phase.
+            val indeterminate = mean <= 0f
+            val pct = mean.toInt().coerceIn(0, 100)
+
+            val title = if (queued > 0) {
+                app.resources.getQuantityString(R.plurals.notif_title_active_queued, active, active, queued)
+            } else {
+                app.resources.getQuantityString(R.plurals.notif_title_active, active, active)
+            }
+            // Text still names one item — the aggregate lives in the bar and the
+            // title. Prefer a Running item so the name matches the percentage.
+            val shown = activeItems.firstOrNull { it.status is DownloadStatus.Running } ?: activeItems.first()
+            val text = if (indeterminate) {
+                app.getString(R.string.notif_text_preparing)
+            } else {
+                app.getString(R.string.notif_text_progress, shown.title.take(80), pct)
+            }
+            DownloadService.start(app, title, text, pct, indeterminate)
         } else {
             releaseLocks()
             DownloadService.stop(app)
