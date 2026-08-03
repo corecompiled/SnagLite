@@ -322,18 +322,24 @@ class DownloadController(
                     }
                 } else {
                     updateItem(id) {
-                        it.copy(status = DownloadStatus.Error("Saved to cache but could not publish to the gallery."))
+                        it.copy(
+                            status = DownloadStatus.Error(
+                                "Downloaded, but couldn't be saved to your gallery",
+                            ),
+                        )
                     }
                 }
             }
             is DownloadResult.Failure -> {
                 if (result.needsYouTubeSignIn) pendingSignInId = id
                 val needsEngineUpdate = result.needs403Recovery && !result.needsYouTubeSignIn
+                val classified = DownloadErrors.classify(result.message)
                 val displayMessage = when {
-                    needsEngineUpdate ->
-                        "YouTube blocked this download (403). The engine refresh + retry didn't recover — " +
-                            "tap Update engine, or open Settings → Update download engine, then retry."
-                    else -> result.message
+                    // These two already have a button attached, so the line only has
+                    // to say what happened — the affordance says what to do.
+                    needsEngineUpdate -> "YouTube blocked this download"
+                    result.needsYouTubeSignIn -> "This video requires signing in"
+                    else -> classified.message
                 }
                 updateItem(id) {
                     it.copy(
@@ -341,6 +347,7 @@ class DownloadController(
                             message = displayMessage,
                             needsYouTubeSignIn = result.needsYouTubeSignIn,
                             needsEngineUpdate = needsEngineUpdate,
+                            detail = classified.detail,
                         ),
                     )
                 }

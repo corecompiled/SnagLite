@@ -12,6 +12,11 @@ sealed interface DownloadStatus {
         val message: String,
         val needsYouTubeSignIn: Boolean = false,
         val needsEngineUpdate: Boolean = false,
+        /**
+         * Raw tool output behind the card's Details toggle. [message] is the plain
+         * one-liner; this is what someone would paste into a bug report.
+         */
+        val detail: String? = null,
     ) : DownloadStatus
 }
 

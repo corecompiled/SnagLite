@@ -2,6 +2,7 @@ package com.patron.snaglite.ui
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -318,7 +319,34 @@ private fun StatusBlock(status: DownloadStatus) {
             StatusText("Paused", MaterialTheme.colorScheme.onSurfaceVariant)
         }
         is DownloadStatus.Done -> StatusText("Saved to gallery", MaterialTheme.colorScheme.primary)
-        is DownloadStatus.Error -> StatusText(status.message, MaterialTheme.colorScheme.error)
+        is DownloadStatus.Error -> ErrorText(status)
+    }
+}
+
+/**
+ * Plain one-liner, with the raw tool output tucked behind a toggle. Collapsed by
+ * default: the headline is what a user needs, the rest is what a bug report needs.
+ */
+@Composable
+private fun ErrorText(status: DownloadStatus.Error) {
+    var showDetail by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        StatusText(status.message, MaterialTheme.colorScheme.error)
+        if (!status.detail.isNullOrBlank()) {
+            Text(
+                if (showDetail) "Hide details" else "Details",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { showDetail = !showDetail },
+            )
+            if (showDetail) {
+                Text(
+                    status.detail,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

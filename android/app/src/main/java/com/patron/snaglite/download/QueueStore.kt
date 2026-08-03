@@ -51,6 +51,7 @@ internal object QueueStore {
     private const val K_STATUS_MESSAGE = "message"
     private const val K_STATUS_SIGN_IN = "needsYouTubeSignIn"
     private const val K_STATUS_ENGINE = "needsEngineUpdate"
+    private const val K_STATUS_DETAIL = "detail"
 
     private const val STATUS_QUEUED = "queued"
     private const val STATUS_DONE = "done"
@@ -121,6 +122,10 @@ internal object QueueStore {
                 put(K_STATUS_MESSAGE, status.message)
                 put(K_STATUS_SIGN_IN, status.needsYouTubeSignIn)
                 put(K_STATUS_ENGINE, status.needsEngineUpdate)
+                // Without this the Details toggle silently disappears on the next
+                // launch — the one moment someone is most likely to go looking for
+                // it, having just been interrupted.
+                status.detail?.let { put(K_STATUS_DETAIL, it) }
             }
             // Queued, Preparing, Running and Paused all collapse to Queued: their
             // process is gone once this file is read back, so any other state would
@@ -155,6 +160,7 @@ internal object QueueStore {
                 message = o.optString(K_STATUS_MESSAGE),
                 needsYouTubeSignIn = o.optBoolean(K_STATUS_SIGN_IN, false),
                 needsEngineUpdate = o.optBoolean(K_STATUS_ENGINE, false),
+                detail = if (o.has(K_STATUS_DETAIL)) o.getString(K_STATUS_DETAIL) else null,
             )
             else -> DownloadStatus.Queued
         }
