@@ -35,7 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -54,7 +56,8 @@ fun MainScreen(
     var url by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
     var pendingRemoval by remember { mutableStateOf<DownloadItem?>(null) }
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
     var showBattDialog by remember { mutableStateOf(shouldPromptBattOpt(ctx)) }
 
@@ -107,7 +110,17 @@ fun MainScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             trailingIcon = {
                 IconButton(onClick = {
-                    clipboard.getText()?.text?.let { url = it.trim() }
+                    scope.launch {
+                        clipboard.getClipEntry()
+                            ?.clipData
+                            ?.takeIf { it.itemCount > 0 }
+                            ?.getItemAt(0)
+                            ?.coerceToText(ctx)
+                            ?.toString()
+                            ?.trim()
+                            ?.takeIf { it.isNotEmpty() }
+                            ?.let { url = it }
+                    }
                 }) {
                     Icon(Icons.Filled.ContentPaste, contentDescription = "Paste")
                 }
