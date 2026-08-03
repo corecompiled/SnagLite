@@ -12,6 +12,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.patron.snaglite.yt.CookieStore
@@ -24,6 +25,13 @@ class YouTubeSignInActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Same call MainActivity makes, and for the same reason: it picks the
+        // system-bar icon appearance from the current night mode. Without it
+        // this activity keeps the platform default — light icons — which are
+        // near-invisible against its light window background in day mode. The
+        // status bar is affected in both navigation modes, the navigation bar
+        // only in three-button, where it is drawn rather than a gesture pill.
+        enableEdgeToEdge()
 
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

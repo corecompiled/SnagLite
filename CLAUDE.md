@@ -141,7 +141,9 @@ Items 8–11 were added by the 2026 toolchain modernization branch. All four wer
 - **`DownloadService.onTimeout`** (Android 15's 6h/24h `dataSync` quota). No `adb` command spends the quota; it can only be observed on a genuinely long session.
 - **Predictive-back cancel** (start the gesture, hold, slide back, release below the commit threshold). `adb shell input swipe` only produces linear gestures, so this needs a human thumb.
 
-One real finding, minor and not a merge blocker: `YouTubeSignInActivity` never calls `enableEdgeToEdge()` and never sets `isAppearanceLightStatusBars` / `isAppearanceLightNavigationBars`, so in **light mode** the system status-bar icons (and, in three-button navigation, the nav-bar icons) render near-white on the activity's near-white background and are hard to read. Content insets themselves are correct in both navigation modes — nothing is clipped or overlapped. Dark mode is unaffected.
+The run turned up one real defect, since fixed: `YouTubeSignInActivity` did not call `enableEdgeToEdge()`, so it kept the platform default system-bar icon appearance and, in **light mode**, drew near-white status-bar icons (and near-white three-button nav-bar icons) on its near-white background. Content insets were never the problem. The activity now makes the same `enableEdgeToEdge()` call `MainActivity` does; re-verified on device across light/dark × gesture/three-button. Every View-based screen added here needs that call — the Compose screens get it from `MainActivity`.
+
+Reaching that activity for a test is awkward: it is `exported="false"` and `am start` is refused even against a debug build. Flip `exported="true"`, build a throwaway debug APK, verify, then revert and confirm the tree is clean.
 
 ## Deliberately out of scope
 
