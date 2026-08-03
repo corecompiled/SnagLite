@@ -12,6 +12,8 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.patron.snaglite.yt.CookieStore
 import com.patron.snaglite.yt.YouTubePrefs
 
@@ -72,6 +74,36 @@ class YouTubeSignInActivity : ComponentActivity() {
         }
         container.addView(web)
         setContentView(container)
+
+        // This is the app's only View-based screen. With targetSdk 36, Android
+        // 15+ draws every window edge-to-edge and ignores
+        // setDecorFitsSystemWindows, so without this the header label and the
+        // Close button sit under the status bar and the bottom of the login
+        // page — where Google puts its Sign in / Next button — sits under the
+        // navigation bar. Insets are added to the root's own padding so any
+        // design padding survives; the header keeps its 24px separately.
+        val baseLeft = container.paddingLeft
+        val baseTop = container.paddingTop
+        val baseRight = container.paddingRight
+        val baseBottom = container.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(container) { v, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+            )
+            v.setPadding(
+                baseLeft + bars.left,
+                baseTop + bars.top,
+                baseRight + bars.right,
+                baseBottom + bars.bottom,
+            )
+            // Returned unconsumed on purpose. The only children are a plain
+            // LinearLayout header, which ignores insets entirely, and the
+            // WebView — so there is nothing here that would double-apply the
+            // system-bar padding, while WindowInsetsCompat.CONSUMED would also
+            // swallow Type.ime() and stop the WebView reacting to the keyboard
+            // it needs for the login form.
+            insets
+        }
 
         val cm = CookieManager.getInstance()
         cm.setAcceptCookie(true)
