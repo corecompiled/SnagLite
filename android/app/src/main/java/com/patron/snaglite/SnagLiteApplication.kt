@@ -9,6 +9,9 @@ import com.patron.snaglite.download.DownloadController
 import com.patron.snaglite.download.MediaSink
 import com.patron.snaglite.download.SnagLitePrefs
 import com.patron.snaglite.download.resolvers.IframeUnwrapper
+import com.patron.snaglite.ui.ThemeMode
+import com.patron.snaglite.ui.themeModeFromPref
+import com.patron.snaglite.ui.toPref
 import com.patron.snaglite.yt.EngineUpdateChecker
 import com.patron.snaglite.yt.YouTubePrefs
 import com.yausername.aria2c.Aria2c
@@ -17,6 +20,9 @@ import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -42,11 +48,29 @@ class SnagLiteApplication : Application() {
         DownloadController(this, applicationScope)
     }
 
+    /**
+     * Held here rather than in a ViewModel because the theme wraps the whole
+     * activity, above where any ViewModel is scoped, and the setting has to take
+     * effect the moment it is changed rather than on next launch.
+     */
+    // Seeded in onCreate, NOT here. A field initializer runs in the Application
+    // constructor, before attachBaseContext, so touching SharedPreferences at this
+    // point dereferences a null base context and kills the process at the splash
+    // screen — before installCrashHandler() has run, so it leaves no crash dump.
+    private val _themeMode = MutableStateFlow(ThemeMode.System)
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    fun setThemeMode(mode: ThemeMode) {
+        SnagLitePrefs.setThemeMode(this, mode.toPref())
+        _themeMode.value = mode
+    }
+
     private val engineMutex = Mutex()
 
     override fun onCreate() {
         installCrashHandler()
         super.onCreate()
+        _themeMode.value = themeModeFromPref(SnagLitePrefs.themeMode(this))
         createNotificationChannel()
         // Load the gitignored wrapper-host list from assets (empty if missing).
         IframeUnwrapper.init(this)

@@ -10,6 +10,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.patron.snaglite.download.SnagLitePrefs
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF2962FF),
@@ -23,9 +24,36 @@ private val DarkColors = darkColorScheme(
     secondary = Color(0xFF1DE9B6),
 )
 
+enum class ThemeMode { System, Light, Dark }
+
+fun themeModeFromPref(value: String): ThemeMode = when (value) {
+    SnagLitePrefs.THEME_LIGHT -> ThemeMode.Light
+    SnagLitePrefs.THEME_DARK -> ThemeMode.Dark
+    else -> ThemeMode.System
+}
+
+fun ThemeMode.toPref(): String = when (this) {
+    ThemeMode.Light -> SnagLitePrefs.THEME_LIGHT
+    ThemeMode.Dark -> SnagLitePrefs.THEME_DARK
+    ThemeMode.System -> SnagLitePrefs.THEME_SYSTEM
+}
+
 @Composable
 fun SnagLiteTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    mode: ThemeMode = ThemeMode.System,
+    content: @Composable () -> Unit,
+) {
+    val darkTheme = when (mode) {
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+        ThemeMode.System -> isSystemInDarkTheme()
+    }
+    SnagLiteTheme(darkTheme = darkTheme, content = content)
+}
+
+@Composable
+private fun SnagLiteTheme(
+    darkTheme: Boolean,
     content: @Composable () -> Unit,
 ) {
     val colors = when {
