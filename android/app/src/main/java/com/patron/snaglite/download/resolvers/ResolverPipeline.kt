@@ -13,6 +13,17 @@ class ResolverPipeline {
         ResolverC(),
     )
 
+    /**
+     * True when the host is in the runtime wrapper list, i.e. we expected to find an
+     * iframe on it. Lets the caller tell "configured wrapper host that yielded
+     * nothing" apart from "site we know nothing about" — two failures that otherwise
+     * arrive looking identical.
+     */
+    fun isWrapperHost(url: String): Boolean {
+        val host = Uri.parse(url).host?.lowercase() ?: return false
+        return IframeUnwrapper.shouldUnwrap(host)
+    }
+
     fun match(url: String): IResolver? {
         val host = Uri.parse(url).host?.lowercase() ?: return null
         return resolvers.firstOrNull { it.matches(host) }
