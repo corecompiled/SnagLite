@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Exists only to win back API 29+ in night mode. Android resolves the night
+      qualifier ahead of the version qualifier, so values-night/themes.xml would
+      otherwise outrank values-v29/themes.xml on API 29+ and silently replace the
+      DeviceDefault.DayNight parent with a fixed dark one. This folder carries
+      both qualifiers, so it is more specific than either.
+
+      Keep this style byte-identical to values-v29/themes.xml. It is a duplicate
+      on purpose: the two cannot be merged without reintroducing the precedence
+      bug described above.
+    -->
+    <style name="Theme.SnagLite" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/snaglite_window_background</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+
+</resources>
