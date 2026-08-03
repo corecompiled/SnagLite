@@ -1,0 +1,44 @@
+version: 2
+
+updates:
+  # .NET CLI — versions live in /Directory.Packages.props
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+
+  # Android — versions live in /android/gradle/libs.versions.toml
+  - package-ecosystem: "gradle"
+    directory: "/android"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      androidx:
+        patterns:
+          - "androidx.*"
+      compose:
+        patterns:
+          - "androidx.compose*"
+    ignore:
+      # Upgrading the download engine changes download behaviour, not build
+      # plumbing. It needs the manual URL matrix in PRIVATE_NOTES.local.md,
+      # so it does not belong in an automated PR.
+      - dependency-name: "io.github.junkfood02.youtubedl-android:*"
+
+  # Workflow actions in .github/workflows/
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
