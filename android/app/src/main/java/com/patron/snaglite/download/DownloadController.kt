@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.util.Log
-import com.patron.snaglite.R
 import com.patron.snaglite.SnagLiteApplication
 import com.patron.snaglite.service.DownloadQueueWorker
 import com.patron.snaglite.yt.YouTubePlaylist
@@ -238,7 +237,7 @@ class DownloadController(
                         it
                     }
                 }
-                bumpServiceNotification()
+                refreshLocksThrottled()
             },
         )
         applyResult(id, result)
@@ -279,7 +278,7 @@ class DownloadController(
                         if (it.status is DownloadStatus.Running) it.copy(status = DownloadStatus.Running(pct, line))
                         else it
                     }
-                    bumpServiceNotification()
+                    refreshLocksThrottled()
                 },
             )
             if (result is DownloadResult.Success) {
@@ -396,7 +395,7 @@ class DownloadController(
     @Volatile private var lastPersistMs = 0L
 
     /**
-     * Mirror the queue to disk. Throttled like [bumpServiceNotification], because
+     * Mirror the queue to disk. Throttled like [refreshLocksThrottled], because
      * progress ticks arrive several times a second and the only thing that changes
      * between most of them is a percentage this store deliberately does not keep.
      *
@@ -436,46 +435,19 @@ class DownloadController(
     internal suspend fun pumpNow() = pumpQueue()
 
     /**
-     * Acquire the wake lock + Wi-Fi lock + foreground service when at least one
-     * download is active, release when none are. Called after every state
-     * transition. The Wi-Fi lock prevents the radio from sleeping mid-stream
-     * when the screen is off; the wake lock keeps the CPU running.
+     * Acquire the wake lock + Wi-Fi lock and guarantee a queue worker exists when at
+     * least one download is active; release the locks when none are. Called after
+     * every state transition. The Wi-Fi lock prevents the radio from sleeping
+     * mid-stream when the screen is off; the wake lock keeps the CPU running.
+     *
+     * The notification is not built here. [DownloadQueueWorker] owns it and reads the
+     * same [items] flow, so there is nothing to push — this only ensures one worker is
+     * running to read it.
      */
     private fun refreshServiceLifecycle() {
-        val items = _items.value
-        val activeItems = items.filter { it.isActive }
-        val active = activeItems.size
+        val active = _items.value.count { it.isActive }
         if (active > 0) {
             ensureLocks()
-            val queued = items.count { it.status is DownloadStatus.Queued }
-
-            // Mean across every active item, not just the first one — with
-            // MAX_ACTIVE = 3 the old single-item read left two downloads
-            // invisible from the shade. Items still Preparing contribute 0,
-            // which is honest: they have started but produced no bytes.
-            val percents = activeItems.map { (it.status as? DownloadStatus.Running)?.percent ?: 0f }
-            val mean = percents.average().toFloat()
-            // Same convention as DownloadItemCard: a percent of exactly 0 means
-            // "no real progress yet", so the bar goes indeterminate rather than
-            // sitting at zero through the challenge-solving phase.
-            val indeterminate = mean <= 0f
-            val pct = mean.toInt().coerceIn(0, 100)
-
-            val title = if (queued > 0) {
-                app.resources.getQuantityString(R.plurals.notif_title_active_queued, active, active, queued)
-            } else {
-                app.resources.getQuantityString(R.plurals.notif_title_active, active, active)
-            }
-            // Text still names one item — the aggregate lives in the bar and the
-            // title. Prefer a Running item so the name matches the percentage.
-            val shown = activeItems.firstOrNull { it.status is DownloadStatus.Running } ?: activeItems.first()
-            val text = if (indeterminate) {
-                app.getString(R.string.notif_text_preparing)
-            } else {
-                app.getString(R.string.notif_text_progress, shown.title.take(80), pct)
-            }
-            // The worker owns the notification now; it reads the same items flow, so
-            // there is nothing to push. This call only guarantees one is running.
             DownloadQueueWorker.ensureRunning(app)
         } else {
             releaseLocks()
@@ -485,11 +457,18 @@ class DownloadController(
         }
     }
 
-    @Volatile private var lastNotifMs = 0L
-    private fun bumpServiceNotification() {
+    @Volatile private var lastLockRefreshMs = 0L
+
+    /**
+     * Progress-tick entry point into [refreshServiceLifecycle]. Ticks arrive several
+     * times a second and none of them change the active/idle answer, so the only
+     * thing this buys per call is pushing the wake lock's timeout back out — worth
+     * doing, not worth doing at that rate.
+     */
+    private fun refreshLocksThrottled() {
         val now = System.currentTimeMillis()
-        if (now - lastNotifMs < 500L) return
-        lastNotifMs = now
+        if (now - lastLockRefreshMs < 500L) return
+        lastLockRefreshMs = now
         refreshServiceLifecycle()
     }
 

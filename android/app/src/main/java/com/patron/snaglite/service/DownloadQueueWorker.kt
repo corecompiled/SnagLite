@@ -12,6 +12,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.patron.snaglite.MainActivity
@@ -38,7 +39,7 @@ import kotlinx.coroutines.flow.onEach
  * process death *and reboots* and reschedules it, and an expedited worker may start a
  * foreground service from the background — which is what
  * `ForegroundServiceStartNotAllowedException` blocked when `pumpQueue` tried it
- * directly.
+ * directly. See [ensureRunning] for what "expedited" is and is not worth.
  *
  * Because it runs in the same process it talks to [DownloadController] directly, so
  * progress still flows through the existing `StateFlow` and no UI code changes.
@@ -55,8 +56,18 @@ class DownloadQueueWorker(
 
     override suspend fun doWork(): Result {
         val controller = app.downloads
-        runCatching { setForeground(getForegroundInfo()) }
-            .onFailure { Log.w(TAG, "setForeground failed: ${it.message}") }
+
+        // A failed foreground start is not a log line. Without it there is no
+        // service and no notification, yet the downloads keep running on the
+        // application scope — an unprotected process the OS may reclaim
+        // mid-transfer, with nothing on screen to say so. Retrying costs a backoff
+        // delay and by the next attempt the app may be foreground, or the
+        // Android 15 dataSync quota refilled. Nothing in flight is cancelled
+        // either way; the coroutines are not ours to stop.
+        val started = runCatching { setForeground(getForegroundInfo()) }
+            .onFailure { Log.w(TAG, "setForeground failed, retrying: ${it.message}") }
+            .isSuccess
+        if (!started) return Result.retry()
 
         // Kick anything restored from disk or enqueued while we were starting.
         controller.pumpNow()
@@ -149,9 +160,20 @@ class DownloadQueueWorker(
          * queue keeps running rather than being replaced mid-download — every
          * enqueue path calls this, so REPLACE would cancel the foreground service
          * every time a second item was added.
+         *
+         * Expedited is a *request*, not a guarantee: the app has a finite expedited
+         * quota per 24 hours, and once it is spent the scheduler treats the request
+         * as ordinary work. That is why the fallback is
+         * [OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST] and not
+         * `DROP_WORK_REQUEST` — a queue drain that starts late is an inconvenience,
+         * one that never starts is a queue the user has to notice and restart by
+         * hand. Expedited work needs [getForegroundInfo] on API < 31, which this
+         * worker already overrides.
          */
         fun ensureRunning(ctx: Context) {
-            val req = OneTimeWorkRequestBuilder<DownloadQueueWorker>().build()
+            val req = OneTimeWorkRequestBuilder<DownloadQueueWorker>()
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
             WorkManager.getInstance(ctx)
                 .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, req)
         }
