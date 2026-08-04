@@ -26,6 +26,10 @@ import java.io.File
  * Restored in-flight items come back as [DownloadStatus.Queued] and resume through
  * yt-dlp's `--continue` against the partial files in the work directory — which is
  * why those had to move out of `cacheDir` first.
+ *
+ * **[DownloadStatus.Paused] is the exception and comes back paused.** Every other
+ * non-terminal state describes a process, and the process is gone; Paused describes
+ * a decision the user made, and that outlives the process.
  */
 internal object QueueStore {
 
@@ -54,6 +58,7 @@ internal object QueueStore {
     private const val K_STATUS_DETAIL = "detail"
 
     private const val STATUS_QUEUED = "queued"
+    private const val STATUS_PAUSED = "paused"
     private const val STATUS_DONE = "done"
     private const val STATUS_ERROR = "error"
 
@@ -127,9 +132,16 @@ internal object QueueStore {
                 // it, having just been interrupted.
                 status.detail?.let { put(K_STATUS_DETAIL, it) }
             }
-            // Queued, Preparing, Running and Paused all collapse to Queued: their
-            // process is gone once this file is read back, so any other state would
-            // describe work that is not happening.
+            // Paused survives. It is the one non-terminal state that records a
+            // decision rather than a process: the user asked for this download to
+            // stop, and restarting it behind their back on the next launch is the
+            // opposite of what they asked for — expensively so on metered data,
+            // which is usually why someone pauses a download in the first place.
+            // The percentage is still dropped, per the note on this object.
+            is DownloadStatus.Paused -> put(K_STATUS, STATUS_PAUSED)
+            // Queued, Preparing and Running all collapse to Queued: their process is
+            // gone once this file is read back, so any other state would describe
+            // work that is not happening.
             else -> put(K_STATUS, STATUS_QUEUED)
         }
     }
@@ -156,6 +168,10 @@ internal object QueueStore {
                 publicUri = Uri.parse(o.optString(K_STATUS_URI)),
                 displayName = o.optString(K_STATUS_NAME),
             )
+            // Percent 0f, not a remembered one: the partial file is on disk and
+            // `--continue` will pick it up, but nothing has measured it since the
+            // process died, so any number here would be a guess dressed as progress.
+            STATUS_PAUSED -> DownloadStatus.Paused(0f, "Paused")
             STATUS_ERROR -> DownloadStatus.Error(
                 message = o.optString(K_STATUS_MESSAGE),
                 needsYouTubeSignIn = o.optBoolean(K_STATUS_SIGN_IN, false),
