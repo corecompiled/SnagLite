@@ -62,15 +62,26 @@ class DownloadQueueWorker(
         // application scope — an unprotected process the OS may reclaim
         // mid-transfer, with nothing on screen to say so. Retrying costs a backoff
         // delay and by the next attempt the app may be foreground, or the
-        // Android 15 dataSync quota refilled. Nothing in flight is cancelled
-        // either way; the coroutines are not ours to stop.
+        // Android 15 dataSync quota refilled.
         val started = runCatching { setForeground(getForegroundInfo()) }
             .onFailure { Log.w(TAG, "setForeground failed, retrying: ${it.message}") }
             .isSuccess
-        if (!started) return Result.retry()
 
         // Kick anything restored from disk or enqueued while we were starting.
+        // This runs even when the foreground start failed, and deliberately so: the
+        // queue draining unprotected is worse than it draining protected, but it is
+        // far better than it not draining at all. Gating the pump on the service
+        // would mean a device that persistently refuses a background foreground-start
+        // never resumes its queue — a regression against the old service, which
+        // pumped regardless and merely logged.
         controller.pumpNow()
+
+        // Retry only after the pump, so the work still makes progress in the
+        // meantime. WorkManager re-runs this worker with backoff and tries the
+        // foreground start again; the downloads it just started are unaffected,
+        // since those coroutines live on the application scope and are not ours to
+        // stop.
+        if (!started) return Result.retry()
 
         // Suspend until nothing is active or waiting, refreshing the notification as
         // the queue changes. first{} both waits for the drain condition and lets
