@@ -14,7 +14,7 @@ SnagLite is a tiny video downloader that does the obvious thing well: you give i
 There are two builds in this repo:
 
 - **`snaglite.exe`** — a single-file Windows CLI ([`src/SnagLite/`](src/SnagLite/)).
-- **SnagLite Android** — a Kotlin + Jetpack Compose app ([`android/`](android/)) with a foreground download service, a download queue, pause/resume, and a one-time setup screen that bootstraps everything on first launch.
+- **SnagLite Android** — a Kotlin + Jetpack Compose app ([`android/`](android/)) with a download queue that survives the app being killed, pause/resume, a WorkManager-backed foreground service, and a one-time setup screen that bootstraps everything on first launch.
 
 Both builds share the same philosophy: no accounts, no telemetry, no nags, no PATH wrangling. They support [the ~1800 sites yt-dlp supports](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) out of the box, plus a small generic resolver pipeline that fills in for a few common iframe-wrapper hosts the bundled extractors don't recognise.
 
@@ -158,7 +158,7 @@ of Settings.
 
 - Paste any video URL, tap **Download** — saves a merged `.mp4` (or `.m4a` audio-only) to `Movies/SnagLite` (or `Music/SnagLite`) via scoped-storage MediaStore.
 - **Multi-download queue** — up to 3 downloads run in parallel; extra submissions wait as `Queued` and are promoted automatically as slots free. Each download card shows a 16:9 thumbnail (fetched lazily from yt-dlp metadata) with an overlaid progress ring while running, plus the title, uploader, duration, file size, and a thin linear progress bar with the latest speed/ETA line. Swipe a card to remove it (with an optional delete-from-device checkbox).
-- **Pause / resume** — tap the pause icon on any active download. yt-dlp picks up the `.part` file on resume; direct-host downloads from the custom resolver pipeline restart from byte 0 (no per-chunk progress is persisted).
+- **Pause / resume** — tap the pause icon on any active download. yt-dlp picks up the `.part` file on resume; direct-host downloads from the custom resolver pipeline restart from byte 0 (no per-chunk progress is persisted). A paused download stays paused even if the app's process is killed — it will not quietly resume behind you on the next launch.
 - **One-time setup screen** on first launch:
   1. Extracts `yt-dlp` / `ffmpeg` / `aria2c` from APK assets to internal storage.
   2. Auto-updates `yt-dlp` to latest stable.
@@ -166,7 +166,8 @@ of Settings.
   4. Requests `POST_NOTIFICATIONS` permission.
 - Subsequent launches: instant. Background re-check of `yt-dlp` weekly.
 - Live progress bar on the download card (percent + last yt-dlp/aria2c stdout line).
-- Foreground service keeps long downloads alive when the app is backgrounded.
+- **The queue survives the app being killed.** It is mirrored to disk on every change and restored on the next launch, so a download interrupted by the OS reclaiming memory picks up from its partial file rather than starting over. After a reboot it resumes on its own once you unlock the phone, without the app being opened. Two cases it cannot recover from: a reboot you never unlock after (the queue lives in credential-encrypted storage, which stays locked), and a manual **Force stop** (Android blocks every component of a force-stopped app until you open it again).
+- A foreground service — run by WorkManager, so it is rescheduled rather than dropped — keeps long downloads alive when the app is backgrounded, with one notification showing the whole queue's progress.
 - **Background reliability** — SnagLite holds a `PARTIAL_WAKE_LOCK` so the CPU stays awake while downloads run, and a `WIFI_MODE_FULL_HIGH_PERF` `WifiLock` so the Wi-Fi radio doesn't sleep mid-stream when the screen is off. On first launch the app prompts to add itself to the battery-optimization exemption list — this prevents doze-mode throttling on Android 6+ and is what keeps a long download going while the phone is locked.
 - No telemetry. No accounts.
 
@@ -247,7 +248,7 @@ Sign-in to YouTube isn't surfaced in Settings — it's offered automatically (as
 | Filename | `<title> [<id>].(mp4|m4a)` (yt-dlp `--restrict-filenames`) |
 | Downloader (yt-dlp path) | `aria2c -x16 -s16 -k1M` |
 | Downloader (resolver path) | OkHttp 8-chunk parallel `Range` GETs |
-| Cache dir | `<cacheDir>/snaglite-dl/<download-id>/` (per-download subdir; kept across pause/resume, removed when the item is dismissed) |
+| Work dir | `<filesDir>/snaglite-dl/<download-id>/` (per-download subdir; kept across pause/resume, removed when the item is dismissed or published). Deliberately not under `cacheDir`, which the OS may reclaim under storage pressure — most likely while the app is backgrounded and against the largest file, i.e. the near-complete download you just switched away from. |
 | Concurrency | 3 active downloads; extras queued |
 
 ### Paths (on-device)
@@ -256,6 +257,8 @@ Sign-in to YouTube isn't surfaced in Settings — it's offered automatically (as
 |---|---|
 | Native binaries | `/data/data/com.patron.snaglite/files/` (libpython, ffmpeg, aria2c, yt-dlp.zip) |
 | YouTube cookies | `<filesDir>/yt-cookies.txt` (Netscape format) |
+| Download queue | `<filesDir>/queue.json` (mirrored on every change; restored on launch) |
+| In-progress downloads | `<filesDir>/snaglite-dl/<download-id>/` |
 | Prefs | `getSharedPreferences("snaglite_yt", MODE_PRIVATE)` + `getSharedPreferences("snaglite_app", MODE_PRIVATE)` |
 
 ### Permissions
@@ -315,7 +318,6 @@ The project was previously called **Snag**; the rebrand to **SnagLite** is purel
 
 ### Out of scope (Android)
 
-- Playlists / batch input files.
+- Batch input files. (YouTube *playlists* are supported — paste a playlist URL and each entry is downloaded in turn, with the card showing "video N of M".)
 - Subtitles.
 - Sharing intent (`Send to → SnagLite` from YouTube/etc.).
-- Persistence of the download list across process death (in-memory only; queued/paused items are lost if the OS kills the process).
