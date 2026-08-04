@@ -35,7 +35,8 @@ SnagLite/
     │       │                                # SetupScreen, DownloadItemCard, BatteryOptDialog, Theme (SnagLiteTheme), UpdateGate
     │       ├── yt/                          # YouTubeHost, YouTubeArgsInjector, YouTubeBootstrapper (WebView visitor_data harvest),
     │       │                                # YouTubePlaylist, YouTubePrefs ("snaglite_yt"), YouTubeUpdater, EngineUpdateChecker, CookieStore
-    │       ├── service/DownloadService.kt   # foreground service, dataSync type
+    │       ├── service/DownloadQueueWorker.kt # WorkManager worker: owns the dataSync FGS +
+    │       │                                # aggregate notification, waits for the queue to drain
     │       └── webview/YouTubeSignInActivity.kt
     └── gradle/libs.versions.toml            # version catalog — every Android dependency + plugin version
 ```
@@ -60,6 +61,7 @@ All Android versions live in `android/gradle/libs.versions.toml` — never hardc
 | minSdk | 26 | Do not raise |
 | JDK | 17 | |
 | Compose BOM | 2026.06.01 | Material3 1.4.0 |
+| WorkManager | 2.10.5 | Held on the 2.10 line to match the `lifecycle` pin — the 2.11 androidx generation is the one that wants compileSdk 37 |
 | .NET | net10.0 | Current LTS |
 
 **AGP 9.x is deliberately not adopted.** It removes the `org.jetbrains.kotlin.android` plugin in favour of built-in Kotlin *and* flips `android.r8.strictFullModeForKeepRules` to `true`, under which `-keep class A` stops implying A's default constructor. Given this project's history of an R8 launch crash from exactly that (commons-compress `AsiExtraField`), those two migrations must not land together. See the R8 notes below.
@@ -139,7 +141,7 @@ No automated tests. Manual matrix (concrete URLs in `PRIVATE_NOTES.local.md`):
 Items 8–11 were added by the 2026 toolchain modernization branch. All four were **run on hardware on 2026-08-03** (TECNO KM7k, Android 15 / API 35, arm64-v8a) against the release APK — R8 and the resource shrinker included — and all four passed, along with the release smoke test, the setup flow, the Snackbar migration, RTL, and an end-to-end download. Three checks remain unverified and are **not** claimed:
 
 - **API 26–28 base theme** (`values/themes.xml`) and the parked API 26–28 night-mode sign-in header. Invisible on API 29+, which resolves `values-v29/themes.xml` instead. Needs an API 26–28 emulator image.
-- **`DownloadService.onTimeout`** (Android 15's 6h/24h `dataSync` quota). No `adb` command spends the quota; it can only be observed on a genuinely long session.
+- **The `dataSync` timeout path** (Android 15's 6h/24h quota). No `adb` command spends the quota; it can only be observed on a genuinely long session. Now handled by WorkManager rather than the old `DownloadService.onTimeout`.
 - **Predictive-back cancel** (start the gesture, hold, slide back, release below the commit threshold). `adb shell input swipe` only produces linear gestures, so this needs a human thumb.
 
 The run turned up one real defect, since fixed: `YouTubeSignInActivity` did not call `enableEdgeToEdge()`, so it kept the platform default system-bar icon appearance and, in **light mode**, drew near-white status-bar icons (and near-white three-button nav-bar icons) on its near-white background. Content insets were never the problem. The activity now makes the same `enableEdgeToEdge()` call `MainActivity` does; re-verified on device across light/dark × gesture/three-button. Every View-based screen added here needs that call — the Compose screens get it from `MainActivity`.
@@ -152,11 +154,14 @@ Reaching that activity for a test is awkward: it is `exported="false"` and `am s
 - Playlists on CLI (Android supports YouTube playlists via `YouTubePlaylist.enumerate`).
 - Batch files, subtitles, cross-platform CLI.
 - AGP 9.x / built-in Kotlin (see Toolchain versions for why).
-- WorkManager migration for the download queue. **Partly addressed:** `QueueStore` now mirrors the queue to `filesDir/queue.json` on every state change and `DownloadController` restores it in its constructor, so the list itself survives process death. Restored in-flight items come back as `Queued` — never `Running`, since no process is behind them — and resume through yt-dlp's `--continue` against the work directory, which is why `workDirFor` had to move off `cacheDir` (Android reclaims that, preferentially while backgrounded and against the largest files). Progress percentages are deliberately not persisted.
+- ~~WorkManager migration for the download queue~~ — **done**, in two phases. `QueueStore` mirrors the queue to `filesDir/queue.json` on every state change and `DownloadController` restores it synchronously in its constructor, so the list survives process death. Restored in-flight items come back as `Queued` — never `Running`, since no process is behind them — and resume through yt-dlp's `--continue` against the work directory, which is why `workDirFor` had to move off `cacheDir`. Progress percentages are deliberately not persisted. `DownloadQueueWorker` then replaced `DownloadService`: one worker for the whole queue, holding the `dataSync` FGS and the aggregate notification and waiting for the drain. It does **not** run downloads — those stay as capped coroutines on the application scope, so `MAX_ACTIVE = 3` needs no reimplementation on a WorkManager that has no per-tag parallelism cap, and progress still flows through the existing `StateFlow` with no UI changes.
 
-  What is still missing is *execution* under WorkManager. Restored items do not start on their own: `pumpQueue` starts a foreground service, and doing that from `DownloadController`'s constructor could run while the app is backgrounded, which Android 12+ rejects with `ForegroundServiceStartNotAllowedException`. `MainViewModel.init` calls `DownloadController.resumeRestored()` instead, so the pump happens from the foreground — meaning a killed download resumes when the user next opens the app, not before. Moving execution to a `CoroutineWorker` would close that gap and retire `DownloadService` along with the FGS-start hazard; note WorkManager has no per-tag parallelism cap, so `MAX_ACTIVE = 3` would still need the existing promote-from-`Queued` logic. Plan: `~/.claude/plans/download-queue-durability.md`.
+  **Measured limits — do not promise more than this.** Verified on hardware 2026-08-04:
+  - **Reboot, after the user unlocks: resumes unattended.** The process restarts on its own with the launcher in the foreground; the app is never opened.
+  - **Reboot, before unlock: cannot resume, ever.** The device sits in Direct Boot (`RUNNING_LOCKED`) and `/data/user/0/…` is credential-encrypted — that holds `queue.json`, the partials *and WorkManager's own job database*, so there is nothing to reschedule from. Fixing this would mean moving download metadata to device-encrypted storage, outside the user's credential protection. Deliberately not done.
+  - **`am force-stop`: cannot resume until the app is opened.** It sets `stopped=true` on the package, which blocks every component including WorkManager's jobs. Jobs stay registered; they are simply not allowed to run.
 
-  Related: `DownloadService.onTimeout` stops the service cleanly when Android 15 exhausts the `dataSync` 6h/24h quota. In-flight downloads still stop there, but the queue now survives it.
+  Still open: `DownloadService.onTimeout`'s replacement path. The Android 15 6h/24h `dataSync` quota applies to a WorkManager foreground worker exactly as it did to the old service — the difference is WorkManager reschedules afterwards rather than dropping the work.
 - Adaptive / large-screen layouts. The list is single-pane at every window size.
 - Automated tests of any kind.
 
