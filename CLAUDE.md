@@ -17,6 +17,7 @@ SnagLite/
 │   ├── Commands/                            # DownloadCommand, UpdateCommand, WhereCommand, ConfigCommands
 │   ├── Services/                            # Paths, ToolResolver, YtDlpRunner, ProgressParser, Aria2cDownloader, CurlClient
 │   ├── Services/Resolvers/                  # IResolver + ResolverA/B/C + IframeUnwrapper + ResolverPipeline (see PRIVATE_NOTES.local.md)
+│   ├── Services/YouTube/                    # YouTubeHost, YouTubeArgsInjector, EngineUpdateChecker (403/sign-in retry hardening, ported from Android)
 │   ├── Config/AppConfig.cs                  # JSON config at %APPDATA%\SnagLite\config.json
 │   └── hosts.local.txt                      # gitignored, embedded as resource if present
 └── android/                                 # Kotlin/Compose APK, applicationId com.patron.snaglite
