@@ -10,7 +10,7 @@ targetSdk = "36"
 
 # Libraries
 composeBom = "2026.06.01"
-coreKtx = "1.17.0"
+coreKtx = "1.19.0"
 splashscreen = "1.2.0"
 activityCompose = "1.13.0"
 lifecycle = "2.10.0"
