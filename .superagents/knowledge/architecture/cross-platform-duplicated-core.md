@@ -7,7 +7,7 @@ status: completed
 confidence: 90%
 provenance:
   repo: SnagLite
-  sha: e904cc7
+  sha: a0f4446
   branch: main
   sources:
     - src/SnagLite/Commands/DownloadCommand.cs
@@ -138,20 +138,21 @@ iframe pattern is likewise identical — `IframeUnwrapper.cs:55-56` and
   (`src/SnagLite/Services/YouTube/EngineUpdateChecker.cs:7`) it re-downloads yt-dlp
   unconditionally, without asking whether the installed build is already current
   (`ToolResolver.SilentRefreshYtDlpAsync`, called at `EngineUpdateChecker.cs:27`). Live Android
-  does a *check-then-update*: a 24 h debounce (`YouTubePrefs.kt:20`,
+  does a *check-then-update*: a 24 h debounce (`YouTubePrefs.kt:19`,
   `ENGINE_CHECK_INTERVAL_MS`), a metered-network skip (`EngineUpdateChecker.kt:51-54`), then a
   GitHub releases-API version comparison (`EngineUpdateChecker.kt:73-124`) that only installs when
   the remote tag is actually newer. Reaching for the two debounce constants and reading a simple
   "24 h vs 7 days" frequency difference is therefore wrong twice over.
-  **Additionally, `YouTubeUpdater.maybeUpdate` (`yt/YouTubeUpdater.kt:30`) is dead code** — a
-  blind, 7-day-gated update that mirrors the CLI's design exactly, gated on
-  `YouTubePrefs.UPDATE_INTERVAL_MS` (`YouTubePrefs.kt:19`, 7 days), with **zero call sites** in
-  `android/`. Its presence makes the two platforms look more aligned than they are, and
-  `UPDATE_INTERVAL_MS` looks like a live 7-day Android debounce when nothing reads it. The live
-  entry points are `SnagLiteApplication.kt:92` and `UpdateGate.kt:25`, both calling
-  `runSilentUpdateIfDue`. Only `maybeUpdate` is orphaned — `YouTubeUpdater.updateNow` is live at
-  four call sites (`Downloader.kt:189`, `DownloadController.kt:162`, `SettingsScreen.kt:136`,
-  `SetupViewModel.kt:80`), so deleting the dead function does not touch the updater itself.
+  **`YouTubeUpdater.maybeUpdate` was dead code and has since been removed** (a0f4446) — a blind,
+  7-day-gated update mirroring the CLI's design exactly, gated on
+  `YouTubePrefs.UPDATE_INTERVAL_MS` (7 days), with zero call sites. Its presence made the two
+  platforms look more aligned than they were, and `UPDATE_INTERVAL_MS` read like a live 7-day
+  Android debounce when nothing consulted it; both are now gone. The live entry points are
+  `SnagLiteApplication.kt:92` and `UpdateGate.kt:25`, both calling `runSilentUpdateIfDue`.
+  `YouTubeUpdater.updateNow` was untouched and remains live at five call sites
+  (`Downloader.kt:189`, `DownloadController.kt:162`, `SettingsScreen.kt:136`,
+  `SetupViewModel.kt:80`, `EngineUpdateChecker.kt:57`). `YouTubePrefs.lastYtdlpUpdate` is now
+  write-only, left in place deliberately.
 - **Only Android's yt-dlp invocation can resume.** Android passes `--continue`
   (`Downloader.kt:229`); the CLI passes `--no-part` (`YtDlpRunner.cs:120`), which precludes it.
   Whether that should be aligned is an open decision, not a finding — recorded here only because
@@ -194,3 +195,11 @@ iframe pattern is likewise identical — `IframeUnwrapper.cs:55-56` and
   Sources extended with `ToolResolver.cs` and `YouTubeUpdater.kt`. Confidence held at 90% —
   the refutation was in a section the verifier could check, and the section it could not
   (resolver bodies) is unchanged. dev
+
+- 2026-08-21 — Refreshed after a0f4446, which acted on this note's own findings and so touched a
+  listed source. Verify-on-read correctly flagged the note stale; refreshed in place rather than
+  rewritten. `maybeUpdate` and `UPDATE_INTERVAL_MS` are removed, so that bullet is now history
+  plus current state. Corrected `ENGINE_CHECK_INTERVAL_MS` to `YouTubePrefs.kt:19` (the deletion
+  shifted it up one line) and `updateNow`'s live call sites from four to five — `EngineUpdateChecker.kt:57`
+  was described as a live path but omitted from the count. Provenance bumped to a0f4446.
+  Confidence unchanged at 90%; the resolver bodies remain unread. claude
