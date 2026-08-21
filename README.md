@@ -36,7 +36,7 @@ First invocation auto-downloads `yt-dlp.exe`, `ffmpeg.exe`, and `aria2c.exe` to 
 - **Fast by default.** `aria2c -x16 -s16 -k1M` pulls files in parallel chunks — usually a 3–8× speedup over single-connection HTTP.
 - **Handles awkward sites.** When yt-dlp can't crack a host, SnagLite retries once with the generic extractor, and a small custom resolver pipeline handles a handful of common iframe-wrapper sites the bundled extractors miss.
 - **Android background reliability.** Holds a partial wake lock + high-perf Wi-Fi lock for the duration of a download, and prompts to add itself to the battery-optimisation exemption list on first launch so long downloads survive doze mode.
-- **Stays current.** Both builds silently auto-update `yt-dlp` on a 7-day debounce per cold launch (yt-dlp ships extractor fixes daily). Manual `snaglite update` is also available on the CLI.
+- **Stays current.** Both builds silently auto-update `yt-dlp` per cold launch, debounced — 7 days on the CLI, 24 hours on Android (yt-dlp ships extractor fixes daily). Manual `snaglite update` is also available on the CLI.
 - **No telemetry, no accounts, no nags.** Ever.
 
 > Inspired by [ytdlnis](https://github.com/deniscerri/ytdlnis). Previously known as **Snag** — see [Migrating from Snag](#migrating-from-snag) below for the rename details.

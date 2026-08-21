@@ -26,13 +26,6 @@ object YouTubeUpdater {
         }
     }
 
-    /** Background update if last attempt was >7 days ago. Failure is silent. */
-    suspend fun maybeUpdate(ctx: Context) = withContext(Dispatchers.IO) {
-        val last = YouTubePrefs.lastYtdlpUpdate(ctx)
-        if (System.currentTimeMillis() - last < YouTubePrefs.UPDATE_INTERVAL_MS) return@withContext
-        updateNow(ctx)
-    }
-
     fun version(ctx: Context): String? = runCatching {
         YoutubeDL.getInstance().version(ctx)
     }.getOrNull()
