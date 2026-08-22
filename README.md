@@ -115,8 +115,9 @@ snaglite <url> --no-aria2                # use yt-dlp's native downloader instea
 |---|---|
 | Output dir | `%USERPROFILE%\Videos\SnagLite` (override with `--output` or `snaglite config set-output`) |
 | Format | `bv*+ba/b`, merged to `.mp4` |
-| Filename | `<title> [<id>].mp4` (sanitized) |
+| Filename | `<title>_<id>.mp4` — template `%(title)s [%(id)s]` passed through yt-dlp `--restrict-filenames`, which keeps ASCII only and turns spaces/brackets into `_` (e.g. `My_Video_dQw4w9WgXcQ.mp4`) |
 | Downloader | `aria2c -x16 -s16 -k1M` |
+| Playlists | `--no-playlist` — a URL that carries `list=` still downloads only that one video |
 
 ### Paths
 
@@ -132,12 +133,15 @@ snaglite <url> --no-aria2                # use yt-dlp's native downloader instea
 - **YouTube 403 / sign-in error** — auto-recovers: silently re-updates yt-dlp, then retries once with a fallback `player_client` chain (`web_safari,android_vr,mweb`) and yt-dlp's native HTTP downloader (skipping aria2c, which can amplify googlevideo URL drift). Persistent failure usually means yt-dlp itself needs a manual `snaglite update`; cookies / sign-in are out of scope for the CLI by design (see Android for the WebView sign-in fallback).
 - **Geo-blocked** — yt-dlp's `--geo-bypass` is on by default; if a site requires actual VPN-level bypass it will still fail. Use a VPN.
 - **Slow downloads** — confirm aria2c is in use via `snaglite where`. Pass `--no-aria2` only if a CDN throttles parallel connections.
-- **Tool download fails** — corporate proxy, firewall, or GitHub rate limit. Manually drop `yt-dlp.exe`, `ffmpeg.exe`, and `aria2c.exe` into `%LOCALAPPDATA%\SnagLite\bin`.
+- **Tool download fails** — corporate proxy, firewall, or GitHub rate limit. Manually drop `yt-dlp.exe`, `ffmpeg.exe`, and `aria2c.exe` into `%LOCALAPPDATA%\SnagLite\bin`. Every automatic download is verified against its publisher's SHA-256 (yt-dlp's `SHA2-256SUMS`, gyan.dev's `.sha256` sidecar, a pinned hash for aria2) and installed atomically, so an interrupted fetch never leaves a half-written binary behind; a `SHA-256 mismatch` error means the download was corrupt or tampered with — retry, or install by hand as above.
+- **Ctrl+C** — cancels cleanly (`Cancelled.`, exit code 130) and kills the child processes. Partial downloads stay as yt-dlp `.part` files and are resumed by re-running the same command; nothing half-written is ever left under the final filename.
+- **Exit codes** — `0` ok · `1` bad arguments / unusable output directory · `2` download failed · `3` tool setup failed · `130` cancelled.
+- **Background engine refresh** — once a week a newer yt-dlp is fetched *alongside* the download and swapped in after it finishes. If that fails you'll see one grey line and it backs off for 24 h; `snaglite update` forces it.
 
 ### Out of scope (CLI)
 
 - Cookies / login-gated content (no `--cookies-from-browser` passthrough yet).
-- Playlists / batch input files.
+- Playlists / batch input files (enforced with `--no-playlist`).
 - Subtitles.
 - Cross-platform (win-x64 only).
 
@@ -279,19 +283,20 @@ Sign-in to YouTube isn't surfaced in Settings — it's offered automatically (as
 
 ## Cutting a release
 
-Releases (`snaglite.exe` + 4 debug APKs, attached to a tag at https://github.com/corecompiled/SnagLite/releases) are cut by a **manually-triggered** GitHub Actions workflow. There is no auto-publish on tag push — every release is an explicit decision.
+Releases (`snaglite.exe` + 4 release-signed APKs, attached to a tag at https://github.com/corecompiled/SnagLite/releases) are cut by a **manually-triggered** GitHub Actions workflow. There is no auto-publish on tag push — every release is an explicit decision.
 
-1. Make sure `main` builds clean locally:
+1. Bump `<Version>` in `src/SnagLite/SnagLite.csproj` to the release number (it is what `snaglite --version` prints; the workflow refuses a tag that doesn't equal `v<Version>`), then make sure `main` builds and tests clean locally:
    ```powershell
+   dotnet test SnagLite.slnx -c Release
    dotnet publish src/SnagLite/SnagLite.csproj -c Release -r win-x64 --self-contained -o publish
-   cd android; .\gradlew.bat :app:assembleDebug; cd ..
+   cd android; .\gradlew.bat :app:assembleRelease; cd ..
    ```
 2. Push everything you want in the release to `main` (or whichever branch you'll release from).
 3. Open **https://github.com/corecompiled/SnagLite/actions/workflows/release.yml** in a browser.
 4. Click the grey **Run workflow** dropdown (top right).
 5. Fill in:
    - **Branch** — usually `main`. The chosen commit is what the tag attaches to.
-   - **Release tag** — semver with a `v` prefix, e.g. `v0.1.0`. Must not already exist.
+   - **Release tag** — semver with a `v` prefix, e.g. `v0.2.0`. Must not already exist and must equal `v` + the csproj `<Version>`.
    - **Mark as pre-release?** — tick for alpha / beta, leave unticked for stable.
    - **Release notes** — leave blank to auto-generate from commits since the previous tag, or paste your own Markdown.
 6. Click the green **Run workflow** button.

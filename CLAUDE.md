@@ -14,12 +14,18 @@ SnagLite/
 ├── src/SnagLite/                            # .NET 10 console (AssemblyName=snaglite, RootNamespace=SnagLite)
 │   ├── SnagLite.csproj                      # net10.0, single-file self-contained
 │   ├── Program.cs                           # Spectre.Console.Cli wiring
-│   ├── Commands/                            # DownloadCommand, UpdateCommand, WhereCommand, ConfigCommands
-│   ├── Services/                            # Paths, ToolResolver, YtDlpRunner, ProgressParser, Aria2cDownloader, CurlClient
+│   ├── Commands/                            # DownloadCommand, UpdateCommand, WhereCommand, ConfigCommands, ToolSetup (shared first-run guard + exit codes)
+│   ├── Services/                            # Paths, ToolResolver (verified atomic installs), YtDlpRunner, ProgressParser, Aria2cDownloader, CurlClient,
+│   │                                        # HostMatch + FileNames (shared helpers, pinned by fixtures), AppVersion
 │   ├── Services/Resolvers/                  # IResolver + ResolverA/B/C + IframeUnwrapper + ResolverPipeline (see PRIVATE_NOTES.local.md)
 │   ├── Services/YouTube/                    # YouTubeHost, YouTubeArgsInjector, EngineUpdateChecker (403/sign-in retry hardening, ported from Android)
 │   ├── Config/AppConfig.cs                  # JSON config at %APPDATA%\SnagLite\config.json
 │   └── hosts.local.txt                      # gitignored, embedded as resource if present
+├── tests/
+│   ├── fixtures/*.json                      # platform-neutral cases (YouTube error strings, host matching, filenames, packer, progress lines…)
+│   │                                        # — read by the .NET suite now and meant for the Android unit tests too; the one mechanical
+│   │                                        # check on the duplicated CLI/Android core
+│   └── SnagLite.Tests/                      # xUnit, pure functions only (no process/network). InternalsVisibleTo from SnagLite.csproj
 └── android/                                 # Kotlin/Compose APK, applicationId com.patron.snaglite
     ├── app/src/main/
     │   ├── AndroidManifest.xml              # FOREGROUND_SERVICE_DATA_SYNC, WAKE_LOCK, ACCESS_WIFI_STATE, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
@@ -45,6 +51,7 @@ SnagLite/
 ## Build / run
 
 ```bash
+dotnet test SnagLite.slnx -c Release                                                               # xUnit suite under tests/
 dotnet publish src/SnagLite/SnagLite.csproj -c Release -r win-x64 --self-contained -o publish   # → publish/snaglite.exe (~42.6 MB)
 cd android && .\gradlew.bat :app:assembleRelease                                                  # → app-{arm64-v8a,armeabi-v7a,x86_64,universal}-release.apk
 ```
@@ -83,9 +90,9 @@ Three GitHub Actions workflows live under `.github/workflows/`:
 
 | Workflow | Trigger | Output |
 |---|---|---|
-| `dotnet-cli.yml` | push / PR to `src/**` | `snaglite.exe` as 90-day Actions artifact |
+| `dotnet-cli.yml` | push / PR touching `src/**`, `tests/**`, `SnagLite.slnx`, `Directory.Build.props`, `Directory.Packages.props`, or the workflow itself (the two props files matter: Dependabot NuGet bumps land there and used to get no CI at all) | restore → build → `dotnet test` → publish; `snaglite.exe` as 90-day Actions artifact |
 | `android-debug.yml` | push / PR to `android/**` | 4 debug APKs as 90-day Actions artifact |
-| `release.yml` | **manual only** (`workflow_dispatch`) | `snaglite.exe` + 4 release-signed APKs attached to a new GitHub Release. Inputs: `tag` (required, e.g. `v0.1.0`), `prerelease` (bool, default false), `notes` (Markdown; auto-generated from commits if blank). Asset filenames are rewritten to include the tag (`snaglite-<tag>-win-x64.exe`, `snaglite-<tag>-<abi>-release.apk`). User-facing runbook lives in the README **Cutting a release** section. |
+| `release.yml` | **manual only** (`workflow_dispatch`) | `snaglite.exe` + 4 release-signed APKs attached to a new GitHub Release. Inputs: `tag` (required, e.g. `v0.2.0` — **must equal `v` + `<Version>` in `SnagLite.csproj`**, asserted by the first `build-win` step; the csproj value is what `snaglite --version` prints), `prerelease` (bool, default false), `notes` (Markdown; auto-generated from commits if blank). `build-win` also runs `dotnet test`. Asset filenames are rewritten to include the tag (`snaglite-<tag>-windows-x64.exe`, `snaglite-<tag>-android-<abi>-release.apk`). User-facing runbook lives in the README **Cutting a release** section. |
 
 Release signing is wired into `release.yml`: four GitHub Secrets — `SNAGLITE_KEYSTORE_B64` (base64 of the `.jks` file), `SNAGLITE_KEYSTORE_PASS`, `SNAGLITE_KEY_ALIAS`, `SNAGLITE_KEY_PASS` — drive the build. The "Decode release keystore" step writes the `.jks` to `$RUNNER_TEMP/snaglite-release.jks` and exports `SNAGLITE_KEYSTORE_PATH` via `$GITHUB_ENV`, so the subsequent `./gradlew :app:assembleRelease` invocation picks up all four env vars the `signingConfigs.release` block in `android/app/build.gradle.kts` expects. Missing `SNAGLITE_KEYSTORE_B64` is fail-fast — workflow halts rather than silently shipping debug-signed APKs. Keystore generation recipe is in `PRIVATE_NOTES.local.md`.
 
@@ -127,10 +134,21 @@ A `Thread.setDefaultUncaughtExceptionHandler` is installed as the very first lin
 
 `Execute`/`ExecuteAsync` overrides changed in 0.55: now require `CancellationToken` and are `protected`. All command classes use `protected override … (CommandContext, [Settings,] CancellationToken)`.
 
+The token is **only** what `Program.cs` passes to `app.RunAsync(args, token)` — Spectre does not subscribe to `Console.CancelKeyPress` itself. Ctrl+C is therefore wired exactly once, in `Program.cs` (first press cancels cooperatively, second is left to the runtime); commands catch `OperationCanceledException` and return 130. Do not add per-command `CancelKeyPress` handlers. Exit codes: 0 ok · 1 usage/config · 2 download failed · 3 tool setup · 130 cancelled (`ToolSetup.cs`, `DownloadCommand.ExitCancelled`).
+
+## CLI invariants worth knowing
+
+- **Resolved URLs are untrusted input.** Anything a resolver or the iframe unwrapper extracts from a remote page is passed to `aria2c`/`curl` after `--` and must be absolute http(s) (`ResolverPipeline.ResolveAsync`, `IframeUnwrapper.ParseIframeSrc`). Keep that when adding a resolver.
+- **Tool installs are verified and atomic.** `ToolResolver` downloads to `<exe>.new`, checks SHA-256 (yt-dlp `SHA2-256SUMS`, gyan `.sha256`, pinned constant for aria2 — recompute it if `Aria2ZipUrl` changes), then `File.Move(overwrite:true)`. Never write straight to `Paths.YtDlp` etc.
+- **Engine refresh is prefetch + commit.** `EngineUpdateChecker.Start` downloads concurrently; `EngineUpdateHandle.CommitAsync` swaps after the child exits and is called from `DownloadCommand`'s `finally`. `LastChecked` advances only on success; failure stamps `LastFailed` (24 h backoff).
+- **Spectre live displays own the console.** Never `AnsiConsole.*` inside a `Progress`/`Status` callback — buffer and print afterwards (`YtDlpRunner`, `Aria2cDownloader`). Always `MarkupLineInterpolated` when a value can contain `[`.
+
 ## Testing
 
-No automated tests. Manual matrix (concrete URLs in `PRIVATE_NOTES.local.md`):
-1. `snaglite where` — triggers tool fetch.
+`tests/SnagLite.Tests` (xUnit) covers pure functions only — parsers, host matching, filename sanitising, the p,a,c,k unpacker, ResolverB decode, yt-dlp/aria2c/curl argument builders, checksum parsing, engine-check scheduling. Cases live in `tests/fixtures/*.json` so the Android unit tests can share them; add a fixture case before changing behaviour on either platform. No process or network mocking — if a change needs that, it is out of the suite's scope by design. `dotnet test SnagLite.slnx -c Release` runs in `dotnet-cli.yml` and `release.yml`.
+
+Manual matrix (concrete URLs in `PRIVATE_NOTES.local.md`):
+1. `snaglite update` (or the first `snaglite <url>`) — triggers the verified tool fetch.
 2. yt-dlp-native URL — native extractor path.
 3. Configured wrapper-host URL — iframe unwrap → resolver pipeline.
 4. Unknown-host URL — generic extractor fallback.
@@ -171,7 +189,7 @@ Reaching that activity for a test is awkward: it is `exported="false"` and `am s
 
   Still open: `DownloadService.onTimeout`'s replacement path. The Android 15 6h/24h `dataSync` quota applies to a WorkManager foreground worker exactly as it did to the old service — the difference is WorkManager reschedules afterwards rather than dropping the work.
 - Adaptive / large-screen layouts. The list is single-pane at every window size.
-- Automated tests of any kind.
+- ~~Automated tests of any kind~~ — reopened narrowly in 2026-08: pure-function tests with shared fixtures (see **Testing**). Process/network-level tests remain out of scope.
 
 ---
 
