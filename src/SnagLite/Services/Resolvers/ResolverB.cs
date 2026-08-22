@@ -29,7 +29,7 @@ public sealed partial class ResolverB : IResolver
 
     public bool Matches(Uri url) => HostMatch.IsHostOrSubdomain(url.Host, Hosts);
 
-    public async Task<ResolvedMedia?> ResolveAsync(Uri url, HttpClient http, CancellationToken ct)
+    public async Task<ResolvedMedia?> ResolveAsync(Uri url, CancellationToken ct)
     {
         var page = await CurlClient.GetAsync(url.ToString(), referer: url.ToString(), ct: ct);
         if (page.StatusCode is < 200 or >= 400)

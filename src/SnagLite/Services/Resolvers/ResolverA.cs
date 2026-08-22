@@ -19,7 +19,7 @@ public sealed partial class ResolverA : IResolver
 
     public bool Matches(Uri url) => HostMatch.MatchesLabelFragment(url.Host, HostSuffixes);
 
-    public async Task<ResolvedMedia?> ResolveAsync(Uri url, HttpClient http, CancellationToken ct)
+    public async Task<ResolvedMedia?> ResolveAsync(Uri url, CancellationToken ct)
     {
         // Normalize to /e/<id> if /d/<id> given.
         var embed = url;

@@ -29,7 +29,10 @@ public static class YtDlpRunner
         var args = BuildArgs(opt);
 
         var stderrBuf = new StringBuilder();
-        AnsiConsole.MarkupLine($"[grey]→ {opt.Url}[/]");
+        // ERROR lines are shown after the live progress display has closed;
+        // writing through Spectre's live renderer garbles both.
+        var errorLines = new List<string>();
+        AnsiConsole.MarkupLineInterpolated($"[grey]→ {opt.Url}[/]");
 
         var exit = await AnsiConsole.Progress()
             .AutoRefresh(true)
@@ -63,7 +66,7 @@ public static class YtDlpRunner
                             {
                                 stderrBuf.AppendLine(stderr.Text);
                                 if (stderr.Text.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
-                                    AnsiConsole.MarkupLineInterpolated($"[red]{stderr.Text}[/]");
+                                    errorLines.Add(stderr.Text);
                             }
                             break;
                         case ExitedCommandEvent exited:
@@ -78,6 +81,9 @@ public static class YtDlpRunner
                 }
                 return code;
             });
+
+        foreach (var e in errorLines)
+            AnsiConsole.MarkupLineInterpolated($"[red]{e}[/]");
 
         return new YtDlpResult { ExitCode = exit, LastError = stderrBuf.ToString() };
     }

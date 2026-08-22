@@ -1,0 +1,13 @@
+{
+  "description": "aria2c console progress lines ([#gid done/total(pct%) CN:n DL:speed ETA:t]) and what the parser must extract. speed/eta are the raw tokens after DL:/ETA: (no unit normalisation); a line without a parenthesised percent is not progress.",
+  "cases": [
+    { "id": "full",          "line": "[#abcd12 1.2GiB/4.5GiB(26%) CN:8 DL:12MiB ETA:4m12s]", "parses": true, "percent": 26, "speed": "12MiB", "eta": "4m12s" },
+    { "id": "no-eta",        "line": "[#abcd12 4.5GiB/4.5GiB(100%) CN:1 DL:0B]",             "parses": true, "percent": 100, "speed": "0B", "eta": "" },
+    { "id": "no-dl",         "line": "[#abcd12 0B/4.5GiB(0%) CN:16]",                          "parses": true, "percent": 0, "speed": "", "eta": "" },
+    { "id": "small",         "line": "[#1a2b3c 512KiB/1.0MiB(50%) CN:2 DL:256KiB ETA:2s]",    "parses": true, "percent": 50, "speed": "256KiB", "eta": "2s" },
+    { "id": "notice",        "line": "NOTICE: Download complete: C:\\out\\video.mp4",           "parses": false },
+    { "id": "summary",       "line": "Download Results:",                                      "parses": false },
+    { "id": "empty",         "line": "",                                                       "parses": false },
+    { "id": "pct-no-paren",  "line": "50% done",                                               "parses": false }
+  ]
+}

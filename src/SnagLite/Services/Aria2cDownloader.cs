@@ -1,3 +1,4 @@
+using System.Globalization;
 using CliWrap;
 using CliWrap.EventStream;
 using SnagLite.Services.Resolvers;
@@ -6,6 +7,8 @@ using Spectre.Console;
 namespace SnagLite.Services;
 
 public sealed record Aria2cResult(int ExitCode, string OutputPath, string LastError);
+
+public readonly record struct Aria2Tick(double Percent, string Speed, string Eta);
 
 public static class Aria2cDownloader
 {
@@ -18,25 +21,13 @@ public static class Aria2cDownloader
     {
         Directory.CreateDirectory(outputDir);
         var outPath = Path.Combine(outputDir, media.SuggestedName);
+        var args = BuildArgs(media, outputDir);
 
-        var args = new List<string>
-        {
-            "-x16", "-s16", "-k1M",
-            "--console-log-level=warn",
-            "--summary-interval=1",
-            "--allow-overwrite=true",
-            "--auto-file-renaming=false",
-            "--file-allocation=none",
-            $"--user-agent={media.UserAgent}",
-            $"--referer={media.Referer}",
-            "-d", outputDir,
-            "-o", media.SuggestedName,
-            media.DownloadUrl,
-        };
+        AnsiConsole.MarkupLineInterpolated($"[grey]→ direct: {media.DownloadUrl[..Math.Min(80, media.DownloadUrl.Length)]}…[/]");
 
-        AnsiConsole.MarkupLine($"[grey]→ direct: {media.DownloadUrl[..Math.Min(80, media.DownloadUrl.Length)]}…[/]");
-
-        var lastError = "";
+        // Spectre's live renderer owns the console while Progress runs; stderr is
+        // collected here and printed once the bar is gone.
+        var errors = new List<string>();
         var code = await AnsiConsole.Progress()
             .AutoRefresh(true)
             .HideCompleted(false)
@@ -66,10 +57,7 @@ public static class Aria2cDownloader
                             break;
                         case StandardErrorCommandEvent stderr:
                             if (!string.IsNullOrWhiteSpace(stderr.Text))
-                            {
-                                lastError = stderr.Text;
-                                AnsiConsole.MarkupLineInterpolated($"[red]{stderr.Text}[/]");
-                            }
+                                errors.Add(stderr.Text);
                             break;
                         case ExitedCommandEvent exited:
                             exitCode = exited.ExitCode;
@@ -80,41 +68,65 @@ public static class Aria2cDownloader
                 return exitCode;
             });
 
-        return new Aria2cResult(code, outPath, lastError);
+        foreach (var e in errors)
+            AnsiConsole.MarkupLineInterpolated($"[red]{e}[/]");
+
+        return new Aria2cResult(code, outPath, errors.Count > 0 ? errors[^1] : "");
+    }
+
+    /// The URL comes last, after "--": it was extracted from a remote page, and
+    /// aria2c accepts options anywhere on the command line, so without the
+    /// end-of-options marker a hostile page could hand back e.g.
+    /// --on-download-complete=... and have it honoured.
+    internal static List<string> BuildArgs(ResolvedMedia media, string outputDir) =>
+    [
+        "-x16", "-s16", "-k1M",
+        "--console-log-level=warn",
+        "--summary-interval=1",
+        "--allow-overwrite=true",
+        "--auto-file-renaming=false",
+        "--file-allocation=none",
+        $"--user-agent={media.UserAgent}",
+        $"--referer={media.Referer}",
+        "-d", outputDir,
+        "-o", media.SuggestedName,
+        "--",
+        media.DownloadUrl,
+    ];
+
+    private static void HandleAria2Line(string line, ProgressTask task)
+    {
+        if (!TryParseProgressLine(line, out var tick)) return;
+        task.IsIndeterminate = false;
+        task.Value = tick.Percent;
+        task.Description = $"[green]download[/] {tick.Speed}/s • ETA {tick.Eta}";
     }
 
     // aria2c progress line shape:
     // [#abcd12 1.2GiB/4.5GiB(26%) CN:8 DL:12MiB ETA:4m12s]
-    private static void HandleAria2Line(string line, ProgressTask task)
+    internal static bool TryParseProgressLine(string line, out Aria2Tick tick)
     {
-        if (string.IsNullOrWhiteSpace(line)) return;
+        tick = default;
+        if (string.IsNullOrWhiteSpace(line)) return false;
         var pctIdx = line.IndexOf('%');
-        if (pctIdx <= 0) return;
+        if (pctIdx <= 0) return false;
         // Walk back to find '(' before the percent.
         var open = line.LastIndexOf('(', pctIdx);
-        if (open < 0) return;
+        if (open < 0) return false;
         var pctStr = line.Substring(open + 1, pctIdx - open - 1);
-        if (!double.TryParse(pctStr, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var pct)) return;
+        if (!double.TryParse(pctStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var pct)) return false;
 
-        task.IsIndeterminate = false;
-        task.Value = pct;
+        tick = new Aria2Tick(pct, Token(line, "DL:"), Token(line, "ETA:"));
+        return true;
+    }
 
-        var dlIdx = line.IndexOf("DL:", StringComparison.Ordinal);
-        var etaIdx = line.IndexOf("ETA:", StringComparison.Ordinal);
-        string speed = "", eta = "";
-        if (dlIdx >= 0)
-        {
-            var end = line.IndexOfAny(ProgressDelimiters, dlIdx + 3);
-            if (end < 0) end = line.Length;
-            speed = line.Substring(dlIdx + 3, end - dlIdx - 3);
-        }
-        if (etaIdx >= 0)
-        {
-            var end = line.IndexOfAny(ProgressDelimiters, etaIdx + 4);
-            if (end < 0) end = line.Length;
-            eta = line.Substring(etaIdx + 4, end - etaIdx - 4);
-        }
-        task.Description = $"[green]download[/] {speed}/s • ETA {eta}";
+    private static string Token(string line, string prefix)
+    {
+        var idx = line.IndexOf(prefix, StringComparison.Ordinal);
+        if (idx < 0) return "";
+        var start = idx + prefix.Length;
+        var end = line.IndexOfAny(ProgressDelimiters, start);
+        if (end < 0) end = line.Length;
+        return line[start..end];
     }
 }

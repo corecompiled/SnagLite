@@ -10,5 +10,5 @@ public interface IResolver
 {
     string Name { get; }
     bool Matches(Uri url);
-    Task<ResolvedMedia?> ResolveAsync(Uri url, HttpClient http, CancellationToken ct);
+    Task<ResolvedMedia?> ResolveAsync(Uri url, CancellationToken ct);
 }
