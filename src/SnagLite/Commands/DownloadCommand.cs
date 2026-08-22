@@ -194,6 +194,11 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
                 AnsiConsole.MarkupLine("[yellow]Unsupported URL — retrying with generic extractor...[/]");
                 result = await YtDlpRunner.RunAsync(opts with { ForceGeneric = true }, ct);
             }
+            else if (opts.UseAria2 && YtDlpRunner.IsExternalDownloaderFailure(result.LastError))
+            {
+                AnsiConsole.MarkupLine("[yellow]aria2c failed — retrying with yt-dlp's native downloader...[/]");
+                result = await YtDlpRunner.RunAsync(opts with { UseAria2 = false }, ct);
+            }
         }
 
         if (result.ExitCode == 0)

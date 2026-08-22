@@ -115,7 +115,7 @@ snaglite <url> --no-aria2                # use yt-dlp's native downloader instea
 |---|---|
 | Output dir | `%USERPROFILE%\Videos\SnagLite` (override with `--output` or `snaglite config set-output`) |
 | Format | `bv*+ba/b`, merged to `.mp4` |
-| Filename | `<title>_<id>.mp4` — template `%(title)s [%(id)s]` passed through yt-dlp `--restrict-filenames`, which keeps ASCII only and turns spaces/brackets into `_` (e.g. `My_Video_dQw4w9WgXcQ.mp4`) |
+| Filename | `<title> [<id>].mp4` — yt-dlp `--restrict-filenames` applies to the title and id values (ASCII only, spaces → `_`), the template's ` [` `]` are literal (e.g. `My_Video [dQw4w9WgXcQ].mp4`) |
 | Downloader | `aria2c -x16 -s16 -k1M` |
 | Playlists | `--no-playlist` — a URL that carries `list=` still downloads only that one video |
 
@@ -133,6 +133,7 @@ snaglite <url> --no-aria2                # use yt-dlp's native downloader instea
 - **YouTube 403 / sign-in error** — auto-recovers: silently re-updates yt-dlp, then retries once with a fallback `player_client` chain (`web_safari,android_vr,mweb`) and yt-dlp's native HTTP downloader (skipping aria2c, which can amplify googlevideo URL drift). Persistent failure usually means yt-dlp itself needs a manual `snaglite update`; cookies / sign-in are out of scope for the CLI by design (see Android for the WebView sign-in fallback).
 - **Geo-blocked** — yt-dlp's `--geo-bypass` is on by default; if a site requires actual VPN-level bypass it will still fail. Use a VPN.
 - **Slow downloads** — confirm aria2c is in use via `snaglite where`. Pass `--no-aria2` only if a CDN throttles parallel connections.
+- **`aria2c exited with code 1` / "unreachable network"** — aria2c picked an IPv6 address on a machine whose IPv6 route is dead (VPN/Tailscale setups do this) and, unlike yt-dlp's own downloader, it does not fall back to IPv4. The CLI auto-retries once with yt-dlp's native downloader; pass `--no-aria2` to skip aria2c outright on such networks.
 - **Tool download fails** — corporate proxy, firewall, or GitHub rate limit. Manually drop `yt-dlp.exe`, `ffmpeg.exe`, and `aria2c.exe` into `%LOCALAPPDATA%\SnagLite\bin`. Every automatic download is verified against its publisher's SHA-256 (yt-dlp's `SHA2-256SUMS`, gyan.dev's `.sha256` sidecar, a pinned hash for aria2) and installed atomically, so an interrupted fetch never leaves a half-written binary behind; a `SHA-256 mismatch` error means the download was corrupt or tampered with — retry, or install by hand as above.
 - **Ctrl+C** — cancels cleanly (`Cancelled.`, exit code 130) and kills the child processes. Partial downloads stay as yt-dlp `.part` files and are resumed by re-running the same command; nothing half-written is ever left under the final filename.
 - **Exit codes** — `0` ok · `1` bad arguments / unusable output directory · `2` download failed · `3` tool setup failed · `130` cancelled.

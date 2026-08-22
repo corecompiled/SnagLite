@@ -178,6 +178,13 @@ public static class YtDlpRunner
         return args;
     }
 
+    /// yt-dlp reports an external-downloader failure as "ERROR: aria2c exited
+    /// with code N" — seen for example when aria2c picks an IPv6 address on a
+    /// host without a working IPv6 route and, unlike Python's socket layer,
+    /// does not fall back to IPv4. The caller retries with the native downloader.
+    internal static bool IsExternalDownloaderFailure(string stderr) =>
+        stderr.Contains("aria2c exited with code", StringComparison.OrdinalIgnoreCase);
+
     private static string InferOrigin(string url)
     {
         try { var u = new Uri(url); return $"{u.Scheme}://{u.Host}/"; }
