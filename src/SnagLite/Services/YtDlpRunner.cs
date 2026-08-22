@@ -115,7 +115,7 @@ public static class YtDlpRunner
         }
     }
 
-    private static List<string> BuildArgs(YtDlpOptions opt)
+    internal static List<string> BuildArgs(YtDlpOptions opt)
     {
         var args = new List<string>
         {
@@ -123,7 +123,12 @@ public static class YtDlpRunner
             "--ffmpeg-location", Paths.BinDir,
             "--no-mtime",
             "--restrict-filenames",
-            "--no-part",
+            // Single video even when the URL carries a list= parameter; playlists
+            // are out of scope on the CLI and a multi-GB surprise otherwise.
+            "--no-playlist",
+            // Keep yt-dlp's .part convention (and resume) so a cancelled run never
+            // leaves a truncated .mp4 that looks complete.
+            "--continue",
             "--newline",
             "--progress-template",
             "PROG|%(progress._percent_str)s|%(progress._total_bytes_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
