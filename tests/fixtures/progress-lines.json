@@ -1,0 +1,15 @@
+{
+  "description": "yt-dlp --progress-template lines as emitted with the PROG| prefix. Only lines starting with PROG| (after ANSI stripping and trimming) are progress; everything else is ignored.",
+  "cases": [
+    { "id": "plain",        "line": "PROG|  45.2%|  10.00MiB| 1.50MiB/s|00:05", "parses": true,  "percent": 45.2,  "total": "10.00MiB", "speed": "1.50MiB/s", "eta": "00:05" },
+    { "id": "hundred",      "line": "PROG|100.0%|  10.00MiB| 1.50MiB/s|00:00", "parses": true,  "percent": 100.0, "total": "10.00MiB", "speed": "1.50MiB/s", "eta": "00:00" },
+    { "id": "ansi-prefix",  "line": "\u001b[K\u001b[0mPROG|  7.5%|   1.00GiB|12.00MiB/s|01:23", "parses": true, "percent": 7.5, "total": "1.00GiB", "speed": "12.00MiB/s", "eta": "01:23" },
+    { "id": "unknown-eta",  "line": "PROG|  0.0%|  N/A| N/A|Unknown", "parses": true, "percent": 0.0, "total": "N/A", "speed": "N/A", "eta": "Unknown" },
+    { "id": "leading-ws",   "line": "   PROG| 12.0%|  5.00MiB| 2.00MiB/s|00:02", "parses": true, "percent": 12.0, "total": "5.00MiB", "speed": "2.00MiB/s", "eta": "00:02" },
+    { "id": "not-progress", "line": "[download] Destination: video.mp4", "parses": false },
+    { "id": "empty",        "line": "", "parses": false },
+    { "id": "whitespace",   "line": "   ", "parses": false },
+    { "id": "too-few",      "line": "PROG| 50.0%|10MiB", "parses": false },
+    { "id": "no-percent",   "line": "PROG|  n/a|  10.00MiB| 1.50MiB/s|00:05", "parses": false }
+  ]
+}

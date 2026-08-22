@@ -37,3 +37,4 @@ Thumbs.db
 
 # Serena symbol-server project state (machine-local)
 .serena/
+TestResults/

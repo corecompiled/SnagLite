@@ -1,0 +1,20 @@
+{
+  "description": "URLs and whether YouTubeHost.IsYouTube must accept them: exact known host or a subdomain of one; lookalike domains rejected.",
+  "cases": [
+    { "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "isYouTube": true },
+    { "url": "https://youtube.com/watch?v=x", "isYouTube": true },
+    { "url": "https://m.youtube.com/watch?v=x", "isYouTube": true },
+    { "url": "https://music.youtube.com/watch?v=x", "isYouTube": true },
+    { "url": "https://youtu.be/dQw4w9WgXcQ", "isYouTube": true },
+    { "url": "https://www.youtube-nocookie.com/embed/x", "isYouTube": true },
+    { "url": "https://youtube-nocookie.com/embed/x", "isYouTube": true },
+    { "url": "HTTPS://WWW.YOUTUBE.COM/watch?v=x", "isYouTube": true },
+    { "url": "https://gaming.youtube.com/watch?v=x", "isYouTube": true },
+    { "url": "https://notyoutube.com/watch?v=x", "isYouTube": false },
+    { "url": "https://youtube.com.evil.net/watch?v=x", "isYouTube": false },
+    { "url": "https://myyoutu.be/x", "isYouTube": false },
+    { "url": "https://vimeo.com/123", "isYouTube": false },
+    { "url": "not a url", "isYouTube": false },
+    { "url": "", "isYouTube": false }
+  ]
+}

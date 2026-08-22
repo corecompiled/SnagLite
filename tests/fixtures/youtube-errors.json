@@ -1,0 +1,24 @@
+{
+  "description": "yt-dlp stderr excerpts and how YouTubeHost must classify them. is403 -> ForbiddenRegex; isSignIn -> SignInRegex. The two regexes are duplicated verbatim on CLI and Android; this file keeps them honest on both.",
+  "cases": [
+    { "id": "http-403",          "text": "ERROR: unable to download video data: HTTP Error 403: Forbidden", "is403": true,  "isSignIn": false },
+    { "id": "403-forbidden",     "text": "WARNING: [youtube] got 403 Forbidden on fragment 3", "is403": true, "isSignIn": false },
+    { "id": "http-line-403",     "text": "HTTP/1.1 403", "is403": true, "isSignIn": false },
+    { "id": "status-code-403",   "text": "Got error: status code 403", "is403": true, "isSignIn": false },
+    { "id": "errorcode-403",     "text": "...?errorCode=403&reason=x", "is403": true, "isSignIn": false },
+    { "id": "bot-check",         "text": "ERROR: [youtube] abc: Sign in to confirm you're not a bot. Use --cookies-from-browser", "is403": false, "isSignIn": true },
+    { "id": "bot-check-curly",   "text": "Sign in to confirm you’re not a bot", "is403": false, "isSignIn": true },
+    { "id": "please-sign-in",    "text": "ERROR: Please sign in", "is403": false, "isSignIn": true },
+    { "id": "members-only",      "text": "ERROR: [youtube] abc: Join this channel to get access to members-only content", "is403": false, "isSignIn": true },
+    { "id": "age-restricted",    "text": "ERROR: This video is age-restricted", "is403": false, "isSignIn": true },
+    { "id": "inappropriate",     "text": "This video may be inappropriate for some users.", "is403": false, "isSignIn": true },
+    { "id": "login-required",    "text": "ERROR: Login required", "is403": false, "isSignIn": true },
+    { "id": "requires-payment",  "text": "ERROR: This video requires payment to watch.", "is403": false, "isSignIn": true },
+    { "id": "private",           "text": "ERROR: [youtube] abc: Private video. Sign in if you've been granted access", "is403": false, "isSignIn": true },
+    { "id": "both",              "text": "HTTP Error 403: Forbidden\nSign in to confirm you're not a bot", "is403": true, "isSignIn": true },
+    { "id": "unavailable",       "text": "ERROR: [youtube] abc: Video unavailable", "is403": false, "isSignIn": false },
+    { "id": "http-404",          "text": "HTTP Error 404: Not Found", "is403": false, "isSignIn": false },
+    { "id": "empty",             "text": "", "is403": false, "isSignIn": false },
+    { "id": "whitespace",        "text": "   ", "is403": false, "isSignIn": false }
+  ]
+}

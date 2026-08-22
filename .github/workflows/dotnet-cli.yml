@@ -5,18 +5,24 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'tests/**'
       - 'SnagLite.slnx'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
       - '.github/workflows/dotnet-cli.yml'
   pull_request:
     paths:
       - 'src/**'
+      - 'tests/**'
       - 'SnagLite.slnx'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
       - '.github/workflows/dotnet-cli.yml'
   workflow_dispatch:
 
 jobs:
   build:
-    name: Publish win-x64 single-file
+    name: Build, test, publish win-x64 single-file
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -27,8 +33,24 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # setup-dotnet's built-in cache requires packages.lock.json; cache the
+      # global packages folder directly instead.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
       - name: Restore
-        run: dotnet restore src/SnagLite/SnagLite.csproj
+        run: dotnet restore SnagLite.slnx
+
+      - name: Build
+        run: dotnet build SnagLite.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test SnagLite.slnx -c Release --no-build
 
       - name: Publish
         run: dotnet publish src/SnagLite/SnagLite.csproj -c Release -r win-x64 --self-contained -o publish --no-restore

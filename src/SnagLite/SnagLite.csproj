@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SnagLite.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="hosts.local.txt" Condition="Exists('hosts.local.txt')" LogicalName="hosts.local.txt" />
   </ItemGroup>
 

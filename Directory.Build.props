@@ -11,8 +11,9 @@
     <!--
       latest-recommended surfaces the analyzer rules Microsoft considers
       actionable without the noise of latest-all. Warnings are NOT errors:
-      this repo has no test suite, so an analyzer-driven build break would
-      block work with no safety net to justify it.
+      the test suite under tests/ covers pure functions only, so an
+      analyzer-driven build break would still block work on the process /
+      network paths it cannot reach.
     -->
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
