@@ -4,11 +4,24 @@ using Spectre.Console.Cli;
 
 Paths.MigrateLegacyDataDirs();
 
+// One cancellation source for the whole process. Spectre.Console.Cli only
+// forwards the token it is given here to each command's ExecuteAsync, so this
+// is where Ctrl+C has to be wired. First Ctrl+C cancels cooperatively (child
+// processes are killed, partials stay resumable); a second one is left to the
+// runtime, which terminates the process outright.
+using var cts = new CancellationTokenSource();
+Console.CancelKeyPress += (_, e) =>
+{
+    if (cts.IsCancellationRequested) return;
+    e.Cancel = true;
+    cts.Cancel();
+};
+
 var app = new CommandApp<DownloadCommand>();
 app.Configure(config =>
 {
     config.SetApplicationName("snaglite");
-    config.SetApplicationVersion("2.0.0");
+    config.SetApplicationVersion(AppVersion.Informational);
 
     config.AddCommand<DownloadCommand>("get")
         .WithDescription("Download a video URL (also the default if you just pass a URL).")
@@ -31,4 +44,4 @@ app.Configure(config =>
     });
 });
 
-return await app.RunAsync(args);
+return await app.RunAsync(args, cts.Token);

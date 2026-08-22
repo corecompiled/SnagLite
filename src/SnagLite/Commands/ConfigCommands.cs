@@ -23,10 +23,23 @@ public sealed class ConfigSetOutputCommand : Command<ConfigSetOutputCommand.Sett
             return 1;
         }
 
+        // Validate (and create) the directory before anything is persisted; a
+        // saved-but-unusable path would break every later `snaglite <url>`.
+        string full;
+        try
+        {
+            full = System.IO.Path.GetFullPath(settings.Path);
+            Paths.EnsureDir(full);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[red]Cannot use that directory:[/] {ex.Message}");
+            return 1;
+        }
+
         var cfg = AppConfig.Load();
-        cfg.DefaultOutputPath = System.IO.Path.GetFullPath(settings.Path);
+        cfg.DefaultOutputPath = full;
         cfg.Save();
-        Paths.EnsureDir(cfg.DefaultOutputPath);
         AnsiConsole.MarkupLineInterpolated($"[green]✓[/] default output → {cfg.DefaultOutputPath}");
         return 0;
     }

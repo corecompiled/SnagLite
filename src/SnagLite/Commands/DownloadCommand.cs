@@ -43,17 +43,57 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
         }
     }
 
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    // Exit codes: 0 ok · 1 usage/config · 2 download failed · 3 tool setup · 130 cancelled.
+    public const int ExitCancelled = 130;
+
+    // Ctrl+C is wired once in Program.cs; the token arrives here through Spectre.
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+        try
+        {
+            if (!await ToolSetup.TryEnsureAllAsync(ct)) return ToolSetup.ExitToolSetup;
 
-        await ToolResolver.EnsureAllAsync(cts.Token);
+            // Prefetch a newer yt-dlp in the background; it is swapped in *after*
+            // the download so the engine is never replaced under a running process
+            // (and never missing when one starts).
+            var engine = EngineUpdateChecker.Start(ct);
+            try
+            {
+                return await DownloadAsync(settings, ct);
+            }
+            finally
+            {
+                if (!ct.IsCancellationRequested)
+                {
+                    var r = await engine.CommitAsync(TimeSpan.FromSeconds(10));
+                    if (r.Outcome == EngineUpdateOutcome.Updated)
+                        AnsiConsole.MarkupLine("[grey]yt-dlp refreshed to the latest release.[/]");
+                    else if (r.Outcome == EngineUpdateOutcome.Failed)
+                        AnsiConsole.MarkupLineInterpolated($"[grey]yt-dlp background refresh failed: {r.Message} (will retry in 24h)[/]");
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            AnsiConsole.MarkupLine("[yellow]Cancelled.[/]");
+            return ExitCancelled;
+        }
+    }
 
-        var engineCheck = EngineUpdateChecker.MaybeUpdateAsync(cts.Token);
-
+    private static async Task<int> DownloadAsync(Settings settings, CancellationToken ct)
+    {
         var cfg = AppConfig.Load();
-        var outDir = cfg.ResolveOutputDir(settings.OutputDir);
+        string outDir;
+        try
+        {
+            outDir = cfg.ResolveOutputDir(settings.OutputDir);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[red]Cannot use output directory:[/] {ex.Message}");
+            AnsiConsole.MarkupLine("[grey]Pass a different one with -o, or fix the saved default with `snaglite config set-output <path>`.[/]");
+            return 1;
+        }
         AnsiConsole.MarkupLineInterpolated($"[grey]Output:[/] {outDir}");
 
         var workUrl = new Uri(settings.Url);
@@ -65,7 +105,7 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
         {
             try
             {
-                var inner = await IframeUnwrapper.UnwrapAsync(workUrl, cts.Token);
+                var inner = await IframeUnwrapper.UnwrapAsync(workUrl, ct);
                 if (inner is not null)
                 {
                     AnsiConsole.MarkupLineInterpolated($"[grey]Unwrapped iframe:[/] {inner}");
@@ -76,6 +116,7 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
                     AnsiConsole.MarkupLine("[yellow]Iframe unwrap found no inner src.[/]");
                 }
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
                 AnsiConsole.MarkupLineInterpolated($"[yellow]Iframe unwrap failed: {ex.Message}[/]");
@@ -91,7 +132,8 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
             {
                 AnsiConsole.MarkupLineInterpolated($"[grey]Resolver:[/] {resolver.Name}");
                 ResolvedMedia? media = null;
-                try { media = await pipeline.ResolveAsync(workUrl, cts.Token); }
+                try { media = await pipeline.ResolveAsync(workUrl, ct); }
+                catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
                 {
                     AnsiConsole.MarkupLineInterpolated($"[yellow]Resolver failed: {ex.Message}[/]");
@@ -99,7 +141,7 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
 
                 if (media is not null)
                 {
-                    var aria = await Aria2cDownloader.RunAsync(media, outDir, cts.Token);
+                    var aria = await Aria2cDownloader.RunAsync(media, outDir, ct);
                     if (aria.ExitCode == 0)
                     {
                         AnsiConsole.MarkupLineInterpolated($"[green]Saved:[/] {aria.OutputPath}");
@@ -127,7 +169,7 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
             ExtraArgs = YouTubeArgsInjector.ExtraArgs(workUrl.ToString(), useFallbackClients: false),
         };
 
-        var result = await YtDlpRunner.RunAsync(opts, cts.Token);
+        var result = await YtDlpRunner.RunAsync(opts, ct);
 
         if (result.ExitCode != 0)
         {
@@ -135,7 +177,8 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
                 (YouTubeHost.Is403Error(result.LastError) || YouTubeHost.IsSignInError(result.LastError)))
             {
                 AnsiConsole.MarkupLine("[yellow]YouTube 403 / sign-in — refreshing engine and retrying with fallback player_client chain...[/]");
-                try { await ToolResolver.ForceUpdateYtDlpAsync(cts.Token); }
+                try { await ToolResolver.ForceUpdateYtDlpAsync(ct); }
+                catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
                 {
                     AnsiConsole.MarkupLineInterpolated($"[yellow]Engine refresh failed ({ex.Message}); retrying anyway.[/]");
@@ -144,17 +187,14 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
                 {
                     UseAria2 = false,
                     ExtraArgs = YouTubeArgsInjector.ExtraArgs(opts.Url, useFallbackClients: true),
-                }, cts.Token);
+                }, ct);
             }
             else if (result.LastError.Contains("Unsupported URL", StringComparison.OrdinalIgnoreCase))
             {
                 AnsiConsole.MarkupLine("[yellow]Unsupported URL — retrying with generic extractor...[/]");
-                result = await YtDlpRunner.RunAsync(opts with { ForceGeneric = true }, cts.Token);
+                result = await YtDlpRunner.RunAsync(opts with { ForceGeneric = true }, ct);
             }
         }
-
-        try { await engineCheck.WaitAsync(TimeSpan.FromSeconds(10)); }
-        catch { }
 
         if (result.ExitCode == 0)
         {

@@ -35,7 +35,7 @@ public static class ToolResolver
         {
             Timeout = TimeSpan.FromMinutes(10),
         };
-        c.DefaultRequestHeaders.UserAgent.ParseAdd("SnagLite/2.0 (+windows)");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd($"SnagLite/{AppVersion.Short} (+windows)");
         return c;
     }
 
@@ -76,11 +76,6 @@ public static class ToolResolver
             .StartAsync("Updating yt-dlp...", async _ => await InstallYtDlpAsync(ct));
         AnsiConsole.MarkupLine("[green]✓[/] yt-dlp updated");
     }
-
-    /// Silent (no UI) yt-dlp refresh. Downloads to a side file, verifies, then
-    /// swaps in. If yt-dlp.exe is currently executing the swap fails with
-    /// IOException — that's expected and surfaced to the caller.
-    public static Task SilentRefreshYtDlpAsync(CancellationToken ct = default) => InstallYtDlpAsync(ct);
 
     private static async Task InstallYtDlpAsync(CancellationToken ct)
     {
