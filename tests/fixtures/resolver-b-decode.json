@@ -1,0 +1,15 @@
+{
+  "description": "Resolver B payload decode: rot13 -> strip noise digraphs (@$ ^^ ~@ %? *~ !! #&) -> base64 -> each char -3 -> reverse -> base64 -> JSON. 'encoded' was produced by running those steps in reverse over 'decoded'; the noise digraphs were inserted at arbitrary positions.",
+  "cases": [
+    {
+      "id": "direct-and-hls",
+      "encoded": "DROH@$nJkDoIO7HUOpn0^^1fHzkLFy15HGIoo3gn~@MUOAEx9fIRqzqmuJKK%?MIJ2ELEIMqqxIoMJgE*~o0j5GSMqqyIoMQAAEx!!9fIRqzqmu8KTkWAH81#&CSMqqxIoMJgeJ114A0cqoGk8GmyDF2LmIHgxoUWgGUMAJ2qcHGMzo1R1KTf8FJqgJKOzp1IjGUMZEyV0HIqyrSOjKTf8sTM2nmICo3gXMaqWFzuiBTkyoyR1G3ylsJM6IHgapx1fHzkLAIk8JGMysH18nN==",
+      "decoded": "{\"source\":\"https://cdn.example/hls/abc.m3u8\",\"direct_access_url\":\"https://cdn.example/v/abc.mp4\",\"title\":\"Sample Title.mp4\",\"file_code\":\"abc123\"}"
+    }
+  ],
+  "rot13": [
+    { "input": "Hello, World!", "expected": "Uryyb, Jbeyq!" },
+    { "input": "abcxyz ABCXYZ 0123", "expected": "nopklm NOPKLM 0123" },
+    { "input": "", "expected": "" }
+  ]
+}

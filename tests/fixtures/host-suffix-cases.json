@@ -1,0 +1,38 @@
+{
+  "description": "Host matching semantics shared by the resolvers, IframeUnwrapper and YouTubeHost. exactOrSubdomain: the host equals a candidate or is a subdomain of one (lookalikes like 'notvoe.example' or 'voe.example.evil' must NOT match). labelFragments: resolver-A style — a fragment ending in '.' matches a whole DNS label, a fragment ending in '-' matches a label prefix; substrings inside other labels must NOT match. Hosts are compared case-insensitively.",
+  "exactOrSubdomain": {
+    "candidates": [ "wrapper.example", "mirror-one.test" ],
+    "cases": [
+      { "host": "wrapper.example",            "match": true },
+      { "host": "WRAPPER.EXAMPLE",            "match": true },
+      { "host": "www.wrapper.example",        "match": true },
+      { "host": "a.b.wrapper.example",        "match": true },
+      { "host": "mirror-one.test",            "match": true },
+      { "host": "cdn.mirror-one.test",        "match": true },
+      { "host": "notwrapper.example",         "match": false },
+      { "host": "evilwrapper.example",        "match": false },
+      { "host": "wrapper.example.evil.net",   "match": false },
+      { "host": "wrapper.examples",           "match": false },
+      { "host": "mirror-one.test.org",        "match": false },
+      { "host": "example",                    "match": false },
+      { "host": "",                           "match": false }
+    ]
+  },
+  "labelFragments": {
+    "fragments": [ "frag.", "frag-", "d000d." ],
+    "cases": [
+      { "host": "frag.so",                    "match": true },
+      { "host": "www.frag.yt",                "match": true },
+      { "host": "FRAG.SO",                    "match": true },
+      { "host": "frag-la.net",                "match": true },
+      { "host": "cdn.frag-x.example",         "match": true },
+      { "host": "d000d.com",                  "match": true },
+      { "host": "evilfrag.com",               "match": false },
+      { "host": "myfrag.so",                  "match": false },
+      { "host": "fragment.com",               "match": false },
+      { "host": "frags.com",                  "match": false },
+      { "host": "xfrag-la.net",               "match": false },
+      { "host": "",                           "match": false }
+    ]
+  }
+}

@@ -23,17 +23,8 @@ public static class YouTubeHost
         @"HTTP Error 403|\b403 Forbidden\b|HTTP/[\d.]+ 403|status code 403|errorCode=403",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public static bool IsYouTube(string url)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return false;
-        var host = u.Host.ToLowerInvariant();
-        if (Hosts.Contains(host)) return true;
-        foreach (var h in Hosts)
-        {
-            if (host.EndsWith("." + h, StringComparison.Ordinal)) return true;
-        }
-        return false;
-    }
+    public static bool IsYouTube(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) && HostMatch.IsHostOrSubdomain(u.Host, Hosts);
 
     public static bool IsSignInError(string? text) =>
         !string.IsNullOrWhiteSpace(text) && SignInRegex.IsMatch(text);

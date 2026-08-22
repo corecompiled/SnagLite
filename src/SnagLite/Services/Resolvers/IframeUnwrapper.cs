@@ -32,24 +32,29 @@ public static partial class IframeUnwrapper
         return list.ToArray();
     }
 
-    public static bool ShouldUnwrap(Uri url)
-    {
-        var h = url.Host.ToLowerInvariant();
-        foreach (var w in WrapperHosts.Value)
-            if (h.EndsWith(w, StringComparison.Ordinal)) return true;
-        return false;
-    }
+    public static bool ShouldUnwrap(Uri url) =>
+        HostMatch.IsHostOrSubdomain(url.Host, WrapperHosts.Value);
 
     public static async Task<Uri?> UnwrapAsync(Uri url, CancellationToken ct)
     {
         var res = await CurlClient.GetAsync(url.ToString(), ct: ct);
         if (res.StatusCode is < 200 or >= 400) return null;
+        return ParseIframeSrc(res.Body);
+    }
 
-        var m = IframeRegex().Match(res.Body);
+    /// First <iframe src> in the page as an absolute http(s) URI, or null.
+    /// Protocol-relative "//host/..." becomes https. Anything else — javascript:,
+    /// file:, data:, relative paths — is rejected: the result feeds the resolver
+    /// pipeline and yt-dlp's first positional argument, and the user-URL
+    /// validation in DownloadCommand.Settings has already been passed.
+    internal static Uri? ParseIframeSrc(string html)
+    {
+        var m = IframeRegex().Match(html);
         if (!m.Success) return null;
         var src = m.Groups[1].Value.Trim();
         if (src.StartsWith("//", StringComparison.Ordinal)) src = "https:" + src;
-        return Uri.TryCreate(src, UriKind.Absolute, out var u) ? u : null;
+        if (!Uri.TryCreate(src, UriKind.Absolute, out var u)) return null;
+        return u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps ? u : null;
     }
 
     [GeneratedRegex(@"<iframe[^>]+src=[""']([^""']+)[""']",

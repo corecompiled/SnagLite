@@ -1,0 +1,33 @@
+{
+  "description": "Filename helpers used when a resolver names the output file from a page title. sanitize: Windows-invalid characters (\\ / : * ? \" < > | and control chars) become '_', whitespace collapses to single spaces and is trimmed, output is capped at 120 chars, trailing dots/spaces are trimmed, Windows reserved device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9 — as the stem before the first dot, any case) get a leading '_', and an empty result becomes 'video'. stripExt: drops a trailing '.ext' only when ext is 1-4 chars and the dot is not the first character.",
+  "sanitize": [
+    { "id": "plain",          "input": "My Video",                "expected": "My Video" },
+    { "id": "invalid-chars",  "input": "a/b:c?d*e\"f<g>h|i\\j",   "expected": "a_b_c_d_e_f_g_h_i_j" },
+    { "id": "control-char",   "input": "a\u0001b\tc",             "expected": "a_b c" },
+    { "id": "collapse-ws",    "input": "  too   many \n spaces  ", "expected": "too many spaces" },
+    { "id": "trailing-dot",   "input": "trailing.",               "expected": "trailing" },
+    { "id": "trailing-dots-spaces", "input": "name . . ",         "expected": "name" },
+    { "id": "reserved-con",   "input": "CON",                     "expected": "_CON" },
+    { "id": "reserved-lower", "input": "nul",                     "expected": "_nul" },
+    { "id": "reserved-stem",  "input": "com1.backup",             "expected": "_com1.backup" },
+    { "id": "reserved-lpt9",  "input": "LPT9",                    "expected": "_LPT9" },
+    { "id": "not-reserved",   "input": "CONSOLE",                 "expected": "CONSOLE" },
+    { "id": "not-reserved-2", "input": "com10",                   "expected": "com10" },
+    { "id": "empty",          "input": "",                        "expected": "video" },
+    { "id": "whitespace",     "input": "   ",                     "expected": "video" },
+    { "id": "only-invalid",   "input": "???",                     "expected": "___" },
+    { "id": "unicode-kept",   "input": "Café – 東京",              "expected": "Café – 東京" },
+    { "id": "truncate-120",   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaXXXXX", "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  ],
+  "stripExt": [
+    { "input": "movie.mp4",        "expected": "movie" },
+    { "input": "clip.webm",        "expected": "clip" },
+    { "input": "archive.tar.gz",   "expected": "archive.tar" },
+    { "input": "no-ext",           "expected": "no-ext" },
+    { "input": ".hidden",          "expected": ".hidden" },
+    { "input": "v1.2.final",       "expected": "v1.2.final" },
+    { "input": "x.12345",          "expected": "x.12345" },
+    { "input": "trailing.",        "expected": "trailing" },
+    { "input": "",                 "expected": "" }
+  ]
+}

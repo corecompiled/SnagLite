@@ -17,13 +17,7 @@ public sealed partial class ResolverA : IResolver
         "d0000d.", "d0o0d.", "doply.", "dooood.", "vide0.",
     };
 
-    public bool Matches(Uri url)
-    {
-        var h = url.Host.ToLowerInvariant();
-        foreach (var s in HostSuffixes)
-            if (h.Contains(s, StringComparison.Ordinal)) return true;
-        return false;
-    }
+    public bool Matches(Uri url) => HostMatch.MatchesLabelFragment(url.Host, HostSuffixes);
 
     public async Task<ResolvedMedia?> ResolveAsync(Uri url, HttpClient http, CancellationToken ct)
     {
@@ -74,7 +68,7 @@ public sealed partial class ResolverA : IResolver
 
         var title = TitleRegex().Match(html).Groups[1].Value.Trim();
         if (string.IsNullOrWhiteSpace(title)) title = token;
-        var safe = SanitizeFilename(title) + ".mp4";
+        var safe = FileNames.Sanitize(title) + ".mp4";
 
         return new ResolvedMedia(
             DownloadUrl: finalUrl,
@@ -90,14 +84,6 @@ public sealed partial class ResolverA : IResolver
         var rng = Random.Shared;
         for (int i = 0; i < n; i++) buf[i] = chars[rng.Next(chars.Length)];
         return new string(buf);
-    }
-
-    private static string SanitizeFilename(string s)
-    {
-        foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
-        s = Regex.Replace(s, @"\s+", " ").Trim();
-        if (s.Length > 120) s = s[..120].Trim();
-        return string.IsNullOrWhiteSpace(s) ? "video" : s;
     }
 
     [GeneratedRegex(@"/pass_md5/[A-Za-z0-9_\-/]+", RegexOptions.CultureInvariant)]

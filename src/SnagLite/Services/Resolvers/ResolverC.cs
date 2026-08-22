@@ -23,13 +23,7 @@ public sealed partial class ResolverC : IResolver
         "m1xdrop.click", "m1xdrop.net", "m1xdrop.co", "mxdrop.to",
     };
 
-    public bool Matches(Uri url)
-    {
-        var h = url.Host.ToLowerInvariant();
-        foreach (var s in Hosts)
-            if (h == s || h.EndsWith("." + s, StringComparison.Ordinal)) return true;
-        return false;
-    }
+    public bool Matches(Uri url) => HostMatch.IsHostOrSubdomain(url.Host, Hosts);
 
     public async Task<ResolvedMedia?> ResolveAsync(Uri url, HttpClient http, CancellationToken ct)
     {
@@ -89,10 +83,10 @@ public sealed partial class ResolverC : IResolver
         if (string.IsNullOrWhiteSpace(title))
         {
             var vfile = ExtractMdString(unpacked, "vfile");
-            title = !string.IsNullOrWhiteSpace(vfile) ? StripExt(vfile!) : embed.AbsolutePath.TrimEnd('/').Split('/')[^1];
+            title = !string.IsNullOrWhiteSpace(vfile) ? FileNames.StripExt(vfile!) : embed.AbsolutePath.TrimEnd('/').Split('/')[^1];
         }
 
-        var name = SanitizeFilename(StripExt(title!)) + ".mp4";
+        var name = FileNames.Sanitize(FileNames.StripExt(title!)) + ".mp4";
         var refererOrigin = Uri.TryCreate(page.EffectiveUrl, UriKind.Absolute, out var lu)
             ? $"{lu.Scheme}://{lu.Host}/"
             : embed.ToString();
@@ -107,21 +101,41 @@ public sealed partial class ResolverC : IResolver
     private const string Base62 =
         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-    private static string Unpack(string p, int a, int c, string[] k)
+    // Single pass, like the reference unpacker: every \b[0-9A-Za-z]+\b word is
+    // decoded as a base-a index and swapped for k[index] exactly once. A
+    // per-token replace loop would re-scan text it had already substituted,
+    // and dictionary entries routinely contain short tokens like "0" or "a".
+    internal static string Unpack(string p, int a, int c, string[] k)
     {
         if (a < 2 || a > 62) throw new ArgumentOutOfRangeException(nameof(a));
-        for (int i = c - 1; i >= 0; i--)
+        return TokenRegex().Replace(p, m =>
         {
-            if (i >= k.Length) continue;
-            var key = k[i];
-            if (string.IsNullOrEmpty(key)) continue;
-            var token = ToBase(i, a);
-            p = Regex.Replace(p, @"\b" + Regex.Escape(token) + @"\b", _ => key);
-        }
-        return p;
+            var idx = FromBase(m.Value, a);
+            if (idx < 0 || idx >= c || idx >= k.Length) return m.Value;
+            var key = k[idx];
+            return string.IsNullOrEmpty(key) ? m.Value : key;
+        });
     }
 
-    private static string ToBase(int n, int radix)
+    // Inverse of ToBase; -1 when the word contains a digit outside the radix
+    // (then it was never a token).
+    private static int FromBase(string word, int radix)
+    {
+        long n = 0;
+        foreach (var ch in word)
+        {
+            var d = Base62.IndexOf(ch);
+            if (d < 0 || d >= radix) return -1;
+            n = n * radix + d;
+            if (n > int.MaxValue) return -1;
+        }
+        return (int)n;
+    }
+
+    [GeneratedRegex(@"\b[0-9A-Za-z]+\b", RegexOptions.CultureInvariant)]
+    private static partial Regex TokenRegex();
+
+    internal static string ToBase(int n, int radix)
     {
         if (n == 0) return "0";
         var sb = new StringBuilder();
@@ -133,7 +147,7 @@ public sealed partial class ResolverC : IResolver
         return sb.ToString();
     }
 
-    private static string UnescapeJsString(string s)
+    internal static string UnescapeJsString(string s)
     {
         var sb = new StringBuilder(s.Length);
         for (int i = 0; i < s.Length; i++)
@@ -181,20 +195,6 @@ public sealed partial class ResolverC : IResolver
         if (!m.Success) return null;
         var t = m.Groups[1].Value.Trim();
         return string.IsNullOrWhiteSpace(t) ? null : t;
-    }
-
-    private static string StripExt(string s)
-    {
-        var i = s.LastIndexOf('.');
-        return (i > 0 && s.Length - i <= 5) ? s[..i] : s;
-    }
-
-    private static string SanitizeFilename(string s)
-    {
-        foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
-        s = Regex.Replace(s, @"\s+", " ").Trim();
-        if (s.Length > 120) s = s[..120].Trim();
-        return string.IsNullOrWhiteSpace(s) ? "video" : s;
     }
 
     [GeneratedRegex(

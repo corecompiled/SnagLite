@@ -27,13 +27,7 @@ public sealed partial class ResolverB : IResolver
         "sirdomainprovides.com", "tooseasydefenseable.com",
     };
 
-    public bool Matches(Uri url)
-    {
-        var h = url.Host.ToLowerInvariant();
-        foreach (var s in Hosts)
-            if (h == s || h.EndsWith("." + s, StringComparison.Ordinal)) return true;
-        return false;
-    }
+    public bool Matches(Uri url) => HostMatch.IsHostOrSubdomain(url.Host, Hosts);
 
     public async Task<ResolvedMedia?> ResolveAsync(Uri url, HttpClient http, CancellationToken ct)
     {
@@ -98,7 +92,7 @@ public sealed partial class ResolverB : IResolver
         var direct = TryGetString(root, "direct_access_url");
         var source = TryGetString(root, "source");
         var title = TryGetString(root, "title") ?? TryGetString(root, "file_code") ?? "video";
-        var name = SanitizeFilename(StripExt(title)) + ".mp4";
+        var name = FileNames.Sanitize(FileNames.StripExt(title)) + ".mp4";
 
         var landing = Uri.TryCreate(landingUrl, UriKind.Absolute, out var lu) ? lu : url;
         var origin = $"{landing.Scheme}://{landing.Host}/";
@@ -122,7 +116,7 @@ public sealed partial class ResolverB : IResolver
         return null;
     }
 
-    private static string Decode(string s)
+    internal static string Decode(string s)
     {
         s = Rot13(s);
         foreach (var pat in new[] { "@$", "^^", "~@", "%?", "*~", "!!", "#&" })
@@ -139,7 +133,7 @@ public sealed partial class ResolverB : IResolver
         return Encoding.UTF8.GetString(bytes2);
     }
 
-    private static string Rot13(string input)
+    internal static string Rot13(string input)
     {
         var sb = new StringBuilder(input.Length);
         foreach (var c in input)
@@ -156,20 +150,6 @@ public sealed partial class ResolverB : IResolver
         if (root.ValueKind != JsonValueKind.Object) return null;
         if (!root.TryGetProperty(key, out var v)) return null;
         return v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-    }
-
-    private static string StripExt(string s)
-    {
-        var i = s.LastIndexOf('.');
-        return (i > 0 && s.Length - i <= 5) ? s[..i] : s;
-    }
-
-    private static string SanitizeFilename(string s)
-    {
-        foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
-        s = Regex.Replace(s, @"\s+", " ").Trim();
-        if (s.Length > 120) s = s[..120].Trim();
-        return string.IsNullOrWhiteSpace(s) ? "video" : s;
     }
 
     [GeneratedRegex(@"window\.location\.href\s*=\s*['""]([^'""]+)['""]",

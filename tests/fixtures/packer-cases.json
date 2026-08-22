@@ -1,0 +1,28 @@
+{
+  "description": "Dean Edwards p,a,c,k unpacker cases. 'p' is the packed source AFTER JS-string unescaping, 'k' is the pipe-joined dictionary. Substitution must be single-pass: a token is replaced by k[index] exactly once, and replacement text is never re-scanned. The 'unescapeJs' block covers the JS string-literal unescaper applied before unpacking.",
+  "unpack": [
+    { "id": "basic",              "p": "0.1=\"2\";",          "a": 62, "c": 3, "k": "MDCore|wurl|//cdn.example/v.mp4", "expected": "MDCore.wurl=\"//cdn.example/v.mp4\";" },
+    { "id": "regression-rescan",  "p": "0 1",                 "a": 62, "c": 2, "k": "x|0",                              "expected": "x 0" },
+    { "id": "regression-rescan-2","p": "1 0",                 "a": 62, "c": 2, "k": "1|a",                              "expected": "a 1" },
+    { "id": "empty-key-keeps-token", "p": "0 1 2",            "a": 62, "c": 3, "k": "a||c",                             "expected": "a 1 c" },
+    { "id": "radix-10-two-digit", "p": "9 10 11",             "a": 10, "c": 12, "k": "|||||||||nine|ten|eleven",        "expected": "nine ten eleven" },
+    { "id": "radix-36-letters",   "p": "a b 10",              "a": 36, "c": 37, "k": "||||||||||ten|eleven|||||||||||||||||||||||||thirtysix", "expected": "ten eleven thirtysix" },
+    { "id": "radix-62-upper",     "p": "A z 10",              "a": 62, "c": 63, "k": "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||sixtytwo", "expected": "A z sixtytwo" },
+    { "id": "word-boundary",      "p": "foo0 0bar 0",         "a": 62, "c": 1, "k": "X",                                "expected": "foo0 0bar X" },
+    { "id": "token-beyond-c",     "p": "0 5",                 "a": 62, "c": 1, "k": "X",                                "expected": "X 5" },
+    { "id": "token-beyond-k",     "p": "0 1",                 "a": 62, "c": 5, "k": "X",                                "expected": "X 1" },
+    { "id": "no-tokens",          "p": "plain text",          "a": 62, "c": 0, "k": "",                                 "expected": "plain text" }
+  ],
+  "unescapeJs": [
+    { "input": "a\\'b",          "expected": "a'b" },
+    { "input": "a\\\"b",         "expected": "a\"b" },
+    { "input": "a\\\\b",         "expected": "a\\b" },
+    { "input": "a\\nb\\tc\\rd",  "expected": "a\nb\tc\rd" },
+    { "input": "a\\/b",          "expected": "a/b" },
+    { "input": "\\x41\\x62",     "expected": "Ab" },
+    { "input": "\\u0042\\u00e9", "expected": "Bé" },
+    { "input": "\\q",            "expected": "q" },
+    { "input": "no escapes",     "expected": "no escapes" },
+    { "input": "",               "expected": "" }
+  ]
+}
