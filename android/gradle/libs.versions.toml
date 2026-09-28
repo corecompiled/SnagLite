@@ -10,7 +10,7 @@ targetSdk = "36"
 
 # Libraries
 composeBom = "2026.06.01"
-coreKtx = "1.17.0"
+coreKtx = "1.19.1"
 splashscreen = "1.2.0"
 activityCompose = "1.13.0"
 lifecycle = "2.10.0"
@@ -21,7 +21,7 @@ youtubedlAndroid = "0.18.1"
 # Held at the 2.10 line deliberately, matching the lifecycle pin. 2.11.x is out,
 # but its androidx siblings at that generation are the ones CLAUDE.md pins back for
 # requiring compileSdk 37 — no reason to walk into that for a queue worker.
-work = "2.10.5"
+work = "2.12.0"
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
