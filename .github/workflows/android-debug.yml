@@ -30,7 +30,7 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           # The default also requests the legacy 'tools' package, which
           # cmdline-tools 16.0 on the runner no longer offers -> exit 1.
