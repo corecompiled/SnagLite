@@ -36,6 +36,15 @@ updates:
       # plumbing. It needs the manual URL matrix in PRIVATE_NOTES.local.md,
       # so it does not belong in an automated PR.
       - dependency-name: "io.github.junkfood02.youtubedl-android:*"
+      # AGP 9 is deliberately not adopted: it removes the kotlin.android plugin
+      # and turns on R8 strict full mode for keep rules, which needs its own
+      # migration (see CLAUDE.md, Toolchain versions). Gradle 9 travels with it.
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.android.tools.build:gradle"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "gradle-wrapper"
+        update-types: ["version-update:semver-major"]
 
   # Workflow actions in .github/workflows/
   - package-ecosystem: "github-actions"
