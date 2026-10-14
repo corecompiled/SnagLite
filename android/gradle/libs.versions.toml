@@ -15,7 +15,7 @@ splashscreen = "1.2.0"
 activityCompose = "1.13.0"
 lifecycle = "2.10.0"
 coroutines = "1.11.0"
-okhttp = "5.4.0"
+okhttp = "5.5.0"
 coil = "3.4.0"
 youtubedlAndroid = "0.18.1"
 # Held at the 2.10 line deliberately, matching the lifecycle pin. 2.11.x is out,
