@@ -59,6 +59,12 @@ updates:
       # Kotlin 2.3.20 compiler cannot read. Remove when Kotlin moves to 2.4.
       - dependency-name: "io.coil-kt.coil3:*"
         versions: [">= 3.5.0"]
+      # These versions' AAR metadata require compileSdk 37 (checkDebugAarMetadata
+      # fails on 36). Remove with the compileSdk 37 move.
+      - dependency-name: "androidx.compose:compose-bom"
+        versions: [">= 2026.08.00"]
+      - dependency-name: "com.squareup.okhttp3:*"
+        versions: [">= 5.5.0"]
 
   # Workflow actions in .github/workflows/
   - package-ecosystem: "github-actions"
