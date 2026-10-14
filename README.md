@@ -174,7 +174,7 @@ of Settings.
 ### Supported sites
 
 - All yt-dlp built-in extractors (~1800 sites) — same list as the CLI.
-- **Native resolvers** — a small pipeline of generic resolvers bypasses yt-dlp entirely for a handful of common iframe-wrapper hosts the bundled extractors don't handle. The resolvers download via OkHttp + 8-chunk parallel `Range` GETs.
+- **Native resolvers** — a small pipeline of generic resolvers bypasses yt-dlp entirely for a handful of common iframe-wrapper hosts the bundled extractors don't handle. The resolvers download via OkHttp + 8-chunk parallel `Range` GETs. One resolver also covers a site yt-dlp *does* support natively but whose watch pages answer the Android build's Python client with HTTP 403 (it fingerprints the TLS handshake; desktop yt-dlp gets past it with `curl_cffi` impersonation, which the Android engine lacks) — OkHttp fetches those pages fine. Like every resolver-backed host, that site is video-only.
 - **Iframe wrappers** — a few listing-page hosts are auto-unwrapped before resolution so the underlying provider host is what reaches the resolver pipeline.
 
 ### YouTube auth (automatic)
@@ -270,7 +270,7 @@ Sign-in to YouTube isn't surfaced in Settings — it's offered automatically (as
 - **YouTube 403 Forbidden** — extractor staleness vs. current YouTube signature/n-param scheme. The app silently updates `yt-dlp` on every cold launch (wifi-only, daily debounce). On a 403 it also auto-retries with a `visitor_data` re-harvest + fallback `player_client` chain. If both still fail, the error card shows **Update engine & retry**; if that fails too, hit Settings → **Update download engine** and retry.
 - **YouTube fails with "Please sign in" / 400 errors** — primary + fallback `player_client` chains both regressed. Settings → **Update download engine**, then retry. If a video genuinely needs an account (age-restricted / members-only / "Sign in to confirm…"), the error card surfaces a **Sign in to YouTube** CTA.
 - **`Unsupported URL`** — auto-retries with `--force-generic-extractor`. If still fails, the embed host has no resolver yet — open an issue with the URL.
-- **`Couldn't extract video from <host>`** — host changed its template. Pull `adb logcat -s ResolverA ResolverB ResolverC Packer DirectDownloader` and report the URL. Resolver patterns live under [`android/app/src/main/java/com/patron/snaglite/download/resolvers/`](android/app/src/main/java/com/patron/snaglite/download/resolvers/) and updates land in minutes.
+- **`Couldn't extract video from <host>`** — host changed its template. Pull `adb logcat -s ResolverA ResolverB ResolverC ResolverD Packer DirectDownloader` and report the URL. Resolver patterns live under [`android/app/src/main/java/com/patron/snaglite/download/resolvers/`](android/app/src/main/java/com/patron/snaglite/download/resolvers/) and updates land in minutes.
 - **First-launch setup hangs at "Updating yt-dlp"** — slow network or GitHub throttling. Failure is non-fatal; the bundled yt-dlp will still work. Retry from Settings later.
 - **Saved file not visible in gallery** — MediaStore indexes asynchronously; takes a few seconds. Pull to refresh in the gallery app.
 - **App "keeps stopping" on launch** — the uncaught-exception handler writes a full stack trace to `Android/data/com.patron.snaglite/files/last_crash.txt`. Pull that file via any file manager (Files by Google, the system Files app, USB MTP) and share it; that's the fastest path to a fix.

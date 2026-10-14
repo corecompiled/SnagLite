@@ -67,6 +67,15 @@ object DirectDownloader {
     }
 
     private fun probeLength(client: OkHttpClient, media: ResolvedMedia): Long {
+        val head = probeHead(client, media)
+        if (head > 0L) return head
+        // Some CDNs answer HEAD with a 404 while serving ranged GETs fine, and their
+        // links are often per-connection rate-limited — so losing the length here
+        // would mean a single throttled stream instead of CHUNKS parallel ones.
+        return probeRange(client, media)
+    }
+
+    private fun probeHead(client: OkHttpClient, media: ResolvedMedia): Long {
         val req = Request.Builder()
             .url(media.downloadUrl)
             .head()
@@ -76,12 +85,34 @@ object DirectDownloader {
         return runCatching {
             client.newCall(req).execute().use { res ->
                 if (!res.isSuccessful) {
-                    Log.i(TAG, "HEAD probe non-2xx (${res.code}); will fall through")
+                    Log.i(TAG, "HEAD probe non-2xx (${res.code}); trying a ranged GET")
                     -1L
                 } else res.header("Content-Length")?.toLongOrNull() ?: -1L
             }
         }.getOrElse { t ->
-            Log.i(TAG, "HEAD probe threw (${t.message}); will fall through")
+            Log.i(TAG, "HEAD probe threw (${t.message}); trying a ranged GET")
+            -1L
+        }
+    }
+
+    /** `Range: bytes=0-0` → 206 with `Content-Range: bytes 0-0/<total>`. */
+    private fun probeRange(client: OkHttpClient, media: ResolvedMedia): Long {
+        val req = Request.Builder()
+            .url(media.downloadUrl)
+            .get()
+            .header("User-Agent", media.userAgent)
+            .header("Referer", media.referer)
+            .header("Range", "bytes=0-0")
+            .build()
+        return runCatching {
+            client.newCall(req).execute().use { res ->
+                if (res.code != 206) {
+                    Log.i(TAG, "range probe got ${res.code}; will fall through")
+                    -1L
+                } else res.header("Content-Range")?.substringAfterLast('/')?.toLongOrNull() ?: -1L
+            }
+        }.getOrElse { t ->
+            Log.i(TAG, "range probe threw (${t.message}); will fall through")
             -1L
         }
     }

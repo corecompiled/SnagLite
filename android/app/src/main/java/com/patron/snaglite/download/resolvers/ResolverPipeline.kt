@@ -11,6 +11,7 @@ class ResolverPipeline {
         ResolverA(),
         ResolverB(),
         ResolverC(),
+        ResolverD(),
     )
 
     /**
