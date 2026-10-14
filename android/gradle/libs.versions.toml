@@ -16,7 +16,7 @@ activityCompose = "1.13.0"
 lifecycle = "2.10.0"
 coroutines = "1.11.0"
 okhttp = "5.4.0"
-coil = "3.4.0"
+coil = "3.6.3"
 youtubedlAndroid = "0.18.1"
 # Held at the 2.10 line deliberately, matching the lifecycle pin. 2.11.x is out,
 # but its androidx siblings at that generation are the ones CLAUDE.md pins back for
