@@ -55,6 +55,10 @@ updates:
         versions: [">= 2.11.0"]
       - dependency-name: "androidx.work:*"
         versions: [">= 2.11.0"]
+      # Coil 3.5+ is built with Kotlin 2.4, whose stdlib metadata the project's
+      # Kotlin 2.3.20 compiler cannot read. Remove when Kotlin moves to 2.4.
+      - dependency-name: "io.coil-kt.coil3:*"
+        versions: [">= 3.5.0"]
 
   # Workflow actions in .github/workflows/
   - package-ecosystem: "github-actions"
