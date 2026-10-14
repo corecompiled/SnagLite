@@ -56,7 +56,7 @@ All Android versions live in `android/gradle/libs.versions.toml` — never hardc
 | | Version | Notes |
 |---|---|---|
 | AGP | 8.13.2 | Max supported API is 36.1 |
-| Gradle | 8.13 | AGP 8.13.2's minimum and default |
+| Gradle | 8.14.6 | AGP 8.13.2 needs 8.13+. Gradle 9 is ignored in Dependabot alongside AGP 9 |
 | Kotlin | 2.3.20 | K2. Compose compiler is `org.jetbrains.kotlin.plugin.compose`, versioned *as* Kotlin — there is no `composeOptions` block |
 | compileSdk / targetSdk | 36 | Play requires 36 for new apps and updates as of 2026-08-31 |
 | minSdk | 26 | Do not raise |
@@ -67,10 +67,13 @@ All Android versions live in `android/gradle/libs.versions.toml` — never hardc
 
 **AGP 9.x is deliberately not adopted.** It removes the `org.jetbrains.kotlin.android` plugin in favour of built-in Kotlin *and* flips `android.r8.strictFullModeForKeepRules` to `true`, under which `-keep class A` stops implying A's default constructor. Given this project's history of an R8 launch crash from exactly that (commons-compress `AsiExtraField`), those two migrations must not land together. See the R8 notes below.
 
-**Three libraries are deliberately pinned below their newest release** — do not bump them without solving the blocker first:
+**These libraries are deliberately pinned below their newest release** — do not bump them without solving the blocker first. Each pin has a matching `ignore` rule in `.github/dependabot.yml`; remove the rule when the pin is lifted:
 - `androidx.core:core-ktx` **1.17.0** — 1.19.0 requires compileSdk 37 + AGP 9.1; 1.18.0 requires compileSdk 36.1.
 - `androidx.lifecycle` **2.10.0** — 2.11.0 requires compileSdk 37 + AGP 9.2.
 - `io.coil-kt.coil3` **3.4.0** — 3.5.0 is built with Kotlin 2.4.0, whose stdlib metadata a 2.3.20 compiler cannot read. Observed during this branch's Kotlin 2.2.20 → 2.3.20 migration: the symptom is a flood of bogus "unresolved reference" errors on ordinary stdlib calls in files that never touch Coil.
+- `androidx.work` **2.10.5** — 2.11+ is the compileSdk 37 androidx generation (see the WorkManager row).
+- `androidx.compose:compose-bom` **2026.06.01** — 2026.08.00+ pulls Compose 1.12, whose AAR metadata requires compileSdk 37 (`checkDebugAarMetadata` fails on 36).
+- `com.squareup.okhttp3` **5.4.0** — 5.5.0's AAR metadata requires compileSdk 37.
 
 **Kotlin 2.3.20 makes `kotlinOptions { jvmTarget = "17" }` a hard error, not a deprecation warning.** The replacement is a top-level block in `android/app/build.gradle.kts`: `kotlin { compilerOptions { jvmTarget = JvmTarget.fromTarget("17") } }`.
 
