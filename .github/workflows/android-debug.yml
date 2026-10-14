@@ -31,6 +31,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The default also requests the legacy 'tools' package, which
+          # cmdline-tools 16.0 on the runner no longer offers -> exit 1.
+          packages: 'platform-tools'
 
       - name: Make gradlew executable
         run: chmod +x gradlew
